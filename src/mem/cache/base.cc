@@ -45,6 +45,8 @@
 
 #include "mem/cache/base.hh"
 
+#include <debug/Stackp.hh> //Added by KP Arun
+
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "debug/Cache.hh"
@@ -122,6 +124,14 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
     // whether the connected requestor is actually snooping or not
 
     tempBlock = new TempCacheBlk(blkSize);
+
+    //Added By KP Arun
+  //  if ((TrackerObject::tracker_l2cache == NULL)&&
+  //  ((this->name()).compare("system.cpu.l2cache") == 0)){
+   //     TrackerObject::tracker_l2cache = this;
+     //DPRINTF(Stackp,"inside base cache, l2cache:%p\n",
+     //TrackerObject::l2cache);
+    //}
 
     tags->tagsInit();
     if (prefetcher)
@@ -256,6 +266,9 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
         pkt && pkt->isWrite() && !pkt->req->isUncacheable()) {
         writeAllocator->updateMode(pkt->getAddr(), pkt->getSize(),
                                    pkt->getBlockAddr(blkSize));
+    }
+    if (pkt->isWrite()){
+       // DPRINTF(Stackp, "base cache handleTimingReqMiss for write\n");
     }
 
     if (mshr) {
@@ -1155,7 +1168,7 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
 {
     // sanity check
     assert(pkt->isRequest());
-
+    //BaseCache::get_cache_name();
     chatty_assert(!(isReadOnly && pkt->isWrite()),
                   "Should never see a write in a read-only cache %s\n",
                   name());
@@ -2449,7 +2462,6 @@ bool
 BaseCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
 {
     assert(pkt->isRequest());
-
     if (cache->system->bypassCaches()) {
         // Just forward the packet if caches are disabled.
         // @todo This should really enqueue the packet rather

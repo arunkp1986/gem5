@@ -141,16 +141,17 @@ def addNoISAOptions(parser):
                         help="use external port for SystemC TLM cosimulation")
     parser.add_argument("--caches", action="store_true")
     parser.add_argument("--l2cache", action="store_true")
+    parser.add_argument("--l3cache", action="store_true")
     parser.add_argument("--num-dirs", type=int, default=1)
     parser.add_argument("--num-l2caches", type=int, default=1)
     parser.add_argument("--num-l3caches", type=int, default=1)
-    parser.add_argument("--l1d_size", type=str, default="64kB")
+    parser.add_argument("--l1d_size", type=str, default="32kB")
     parser.add_argument("--l1i_size", type=str, default="32kB")
-    parser.add_argument("--l2_size", type=str, default="2MB")
-    parser.add_argument("--l3_size", type=str, default="16MB")
-    parser.add_argument("--l1d_assoc", type=int, default=2)
-    parser.add_argument("--l1i_assoc", type=int, default=2)
-    parser.add_argument("--l2_assoc", type=int, default=8)
+    parser.add_argument("--l2_size", type=str, default="512kB")
+    parser.add_argument("--l3_size", type=str, default="2MB")
+    parser.add_argument("--l1d_assoc", type=int, default=8)
+    parser.add_argument("--l1i_assoc", type=int, default=8)
+    parser.add_argument("--l2_assoc", type=int, default=16)
     parser.add_argument("--l3_assoc", type=int, default=16)
     parser.add_argument("--cacheline_size", type=int, default=64)
 
@@ -238,7 +239,7 @@ def addCommonOptions(parser):
                         the selected cache)""")
     parser.add_argument("--checker", action="store_true")
     parser.add_argument("--cpu-clock", action="store", type=str,
-                        default='2GHz',
+                        default='3GHz',
                         help="Clock for blocks running at CPU speed")
     parser.add_argument("--smt", action="store_true", default=False,
                         help="""

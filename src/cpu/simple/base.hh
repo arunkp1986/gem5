@@ -165,6 +165,8 @@ class BaseSimpleCPU : public BaseCPU
         panic("writeMem() is not implemented\n");
     }
 
+
+
     virtual Fault
     amoMem(Addr addr, uint8_t* data, unsigned size, Request::Flags flags,
             AtomicOpFunctorPtr amo_op)

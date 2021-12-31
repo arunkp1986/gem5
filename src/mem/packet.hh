@@ -365,6 +365,7 @@ class Packet : public Printable
     /// A pointer to the original request.
     RequestPtr req;
 
+
   private:
    /**
     * A pointer to the data being transferred. It can be different
@@ -393,6 +394,8 @@ class Packet : public Printable
     // Quality of Service priority value
     uint8_t _qosValue;
 
+    uint8_t tracker_pkt;
+
     // hardware transactional memory
 
     /**
@@ -407,6 +410,7 @@ class Packet : public Printable
      * This is used for correctness/debugging only.
      */
     uint64_t htmTransactionUid;
+
 
   public:
 
@@ -779,6 +783,9 @@ class Packet : public Printable
     void copyError(Packet *pkt) { assert(pkt->isError()); cmd = pkt->cmd; }
 
     Addr getAddr() const { assert(flags.isSet(VALID_ADDR)); return addr; }
+
+    void setTracker(uint8_t value) { tracker_pkt = value; }
+    uint8_t getTracker() const { return tracker_pkt; }
     /**
      * Update the address of this packet mid-transaction. This is used
      * by the address mapper to change an already set address to a new
@@ -851,7 +858,7 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd)
         :  cmd(_cmd), id((PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false), size(0),
-           _qosValue(0),
+           _qosValue(0),tracker_pkt(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(0), snoopDelay(0),
@@ -892,7 +899,7 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd, int _blkSize, PacketId _id = 0)
         :  cmd(_cmd), id(_id ? _id : (PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false),
-           _qosValue(0),
+           _qosValue(0),tracker_pkt(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(0),
@@ -921,6 +928,7 @@ class Packet : public Printable
            addr(pkt->addr), _isSecure(pkt->_isSecure), size(pkt->size),
            bytesValid(pkt->bytesValid),
            _qosValue(pkt->qosValue()),
+           tracker_pkt(pkt->tracker_pkt),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(pkt->headerDelay),

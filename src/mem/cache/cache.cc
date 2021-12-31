@@ -490,7 +490,8 @@ Cache::createMissPacket(PacketPtr cpu_pkt, CacheBlk *blk,
         // that missed completely just go through as is
         return nullptr;
     }
-
+    if (!cpu_pkt->needsResponse())
+        std::cout<<"tracker value:"<<cpu_pkt->getTracker()<<std::endl;
     assert(cpu_pkt->needsResponse());
 
     MemCmd cmd;

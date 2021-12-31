@@ -884,6 +884,10 @@ class BaseCache : public ClockedObject
      */
     Tick nextQueueReadyTime() const;
 
+    /** Get cache object name*/
+    void get_cache_name(){
+        std::cout<<SimObject::name()<<std::endl;
+    }
     /** Block size of this cache */
     const unsigned blkSize;
 
@@ -1159,6 +1163,19 @@ class BaseCache : public ClockedObject
         return blkSize;
     }
 
+    /*Added by KP Arun for testing*/
+
+    unsigned
+    getnumber() const
+    {
+        return 42;
+    }
+    /*Added by KP Arun for recvTimingReq wrapper*/
+    void recvTimingReq_tracker(PacketPtr pkt){
+
+        recvTimingReq(pkt);
+
+    }
     const AddrRangeList &getAddrRanges() const { return addrRanges; }
 
     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)

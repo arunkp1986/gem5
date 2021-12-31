@@ -42,6 +42,8 @@
 #include "cpu/simple/timing.hh"
 
 #include "arch/locked_mem.hh"
+#include "arch/x86/regs/misc.hh"
+#include "arch/x86/regs/msr.hh"
 #include "base/compiler.hh"
 #include "config/the_isa.hh"
 #include "cpu/exetrace.hh"
@@ -51,6 +53,7 @@
 #include "debug/HtmCpu.hh"
 #include "debug/Mwait.hh"
 #include "debug/SimpleCPU.hh"
+#include "debug/Stackp.hh" //Added by KP Arun
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 #include "params/TimingSimpleCPU.hh"
@@ -303,6 +306,15 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
 
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
+    if (req->getVaddr() == (Addr)0x7FFFFFFA4 && pkt->isWrite()){
+        //&& pkt->isWrite()
+       //here check whether the vaddr in req is of interest, if yes
+       //copy the packet
+       //and put into list
+       DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
+       PacketPtr tracker_pkt = new Packet(pkt,0,1);
+       comparator_list.push_front(tracker_pkt);
+     }
 
     // hardware transactional memory
     // If the core is in transactional mode or if the request is HtmCMD
@@ -340,6 +352,12 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
             completeDataAccess(pkt);
         }
     }
+   //if (req->getVaddr() == (Addr)0x7FFFFFFA4){
+    //   DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
+  // }
+   if (!comparator_list.empty()){
+       comparator();
+   }
 }
 
 void
@@ -506,6 +524,10 @@ TimingSimpleCPU::handleWritePacket()
     SimpleThread* thread = t_info.thread;
 
     const RequestPtr &req = dcache_pkt->req;
+    //if (req->getVaddr() == (Addr)0x7FFFFFFA4){
+      // DPRINTF(Stackp, "handleWrite req vaddr:%x\n", req->getVaddr());
+    // }
+
     if (req->isLocalAccess()) {
         Cycles delay = req->localAccessor(thread->getTC(), dcache_pkt);
         new IprEvent(dcache_pkt, this, clockEdge(delay));
@@ -520,6 +542,69 @@ TimingSimpleCPU::handleWritePacket()
     }
     return dcache_pkt == NULL;
 }
+/*Added by KP Arun.*/
+void
+TimingSimpleCPU::comparator(){
+    //struct item temp = comparator_list.back();
+
+    SimpleExecContext &t_info = *threadInfo[curThread];
+    SimpleThread* thread = t_info.thread;
+    ThreadContext *tc = thread->getTC();
+    Addr tracking_address = 0;
+    tracking_address = tc->readMiscRegNoEffect(
+                    gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+    if (tracking_address){
+        PacketPtr tracker_pkt = comparator_list.back();
+        RequestPtr tracker_req = tracker_pkt->req;
+        comparator_list.pop_back();
+         //unsigned data_size = 4;
+        uint8_t bitmap[4] = {'a','b','c','d'};
+        //Request::Flags tracker_flags;
+        tracker_req->setFlags(Request::PHYSICAL);
+        tracker_req->setPaddr(tracking_address);
+        tracker_pkt->setAddr(tracking_address);
+        tracker_pkt->setData(bitmap);
+        tracker_pkt->setTracker(1);
+        //std::memcpy(tracker_pkt->data,bitmap,tracker_pkt->getSize());
+        //tracker_pkt->dataDynamic<uint8_t>(bitmap);
+        //RequestorID tracker_id = Request::dirtyRequestorId;
+        if (!dcachePort.sendTimingReq(tracker_pkt)) {
+            DPRINTF(Stackp, "sending failed\n");
+            _status = DcacheRetry;
+        } else {
+            DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+            _status = DcacheWaitResponse;
+            //tracker_pkt->makeResponse();
+            //completeDataAccess(tracker_pkt);
+        // memory system takes ownership of packet
+        //tracker_pkt = NULL;
+       }
+    }
+/*
+    if (tracking_address){
+        //RequestPtr tracker_req = std::make_shared<Request>(tracking_address,
+        //data_size, tracker_flags, tracker_id);
+        //PacketPtr tracker_pkt = Packet::createWrite(tracker_req);
+        //tracker_pkt->allocate();
+        //tracker_pkt->setData(bitmap);
+        if (!dcachePort.sendTimingReq(tracker_pkt)) {
+            DPRINTF(Stackp, "sending failed\n");
+            _status = DcacheRetry;
+        } else {
+            DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+            _status = DcacheWaitResponse;
+            completeDataAccess(tracker_pkt);
+        // memory system takes ownership of packet
+        //tracker_pkt = NULL;
+       }
+        //dcache_pkt = tracker_pkt;
+          //  handleWritePacket();
+           // threadSnoop(tracker_pkt, curThread);
+    }*/
+    return;
+}
+
+
 
 Fault
 TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
@@ -528,7 +613,17 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
 {
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
-
+    //ThreadContext *tc = thread->getTC();
+    //if (TrackerObject::tracking_address == 0){
+        //DPRINTF(Stackp, "inside setting tracking address\n");
+      //  TrackerObject::tracking_address = tc->readMiscRegNoEffect(
+      //  gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+   // }
+    //if (tc->readMiscRegNoEffect(gem5::X86ISA::MISCREG_TRACK_START) != 0){
+      //  DPRINTF(Stackp, "msr: %x value:%x\n",
+      //  gem5::X86ISA::MISCREG_TRACK_START,
+      //  tc->readMiscRegNoEffect(gem5::X86ISA::MISCREG_TRACK_START));
+   // }
     uint8_t *newData = new uint8_t[size];
     const Addr pc = thread->instAddr();
     unsigned block_size = cacheLineSize();
@@ -580,6 +675,12 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
             new DataTranslation<TimingSimpleCPU *>(this, state);
         thread->mmu->translateTiming(req, thread->getTC(), translation, mode);
     }
+    /*if (addr == (Addr)0x7FFFFFFA4){
+        DPRINTF(Stackp, "from timing: Address:%x, size:%u\n", addr, size);
+        //struct item temp = {addr,size};
+        //comparator_list.push_front(temp);
+        //comparator(addr,size);
+    }*/
 
     // Translation faults will be returned via finishTranslation()
     return NoFault;
@@ -824,6 +925,7 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
     DPRINTF(SimpleCPU, "Complete ICache Fetch for addr %#x\n", pkt ?
             pkt->getAddr() : 0);
 
+
     // received a response from the icache: execute the received
     // instruction
     assert(!pkt || !pkt->isError());
@@ -900,6 +1002,7 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
 void
 TimingSimpleCPU::IcachePort::ITickEvent::process()
 {
+
     cpu->completeIfetch(pkt);
 }
 
@@ -942,6 +1045,15 @@ TimingSimpleCPU::IcachePort::recvReqRetry()
 void
 TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
 {
+    //DPRINTF(Stackp, "Address:%x\n",pkt->getAddr());
+    /*if (pkt->getAddr() == (Addr)0x641C000){
+        DPRINTF(Stackp, "Address:%x\n",pkt->getAddr());
+        DPRINTF(Stackp, "status:%x\n",_status);
+
+        delete pkt;
+        return;
+    }*/
+
     // hardware transactional memory
 
     SimpleExecContext *t_info = threadInfo[curThread];
@@ -951,6 +1063,9 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     // received a response from the dcache: complete the load or store
     // instruction
     assert(!pkt->isError());
+    if (_status == 5){
+        DPRINTF(Stackp, "Address:%x\n",pkt->getAddr());
+    }
     assert(_status == DcacheWaitResponse || _status == DTBWaitResponse ||
            pkt->req->getFlags().isSet(Request::NO_ACCESS));
 
@@ -1119,7 +1234,11 @@ bool
 TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(SimpleCPU, "Received load/store response %#x\n", pkt->getAddr());
-
+    //Added by KP Arun
+    if (pkt->getTracker()){
+        DPRINTF(Stackp, "got tracker packet\n");
+        return true;
+    }
     // The timing CPU is not really ticked, instead it relies on the
     // memory system (fetch and load/store) to set the pace.
     if (!tickEvent.scheduled()) {
@@ -1139,6 +1258,8 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 void
 TimingSimpleCPU::DcachePort::DTickEvent::process()
 {
+    if (pkt->getTracker())
+        return;
     cpu->completeDataAccess(pkt);
 }
 

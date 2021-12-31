@@ -41,6 +41,8 @@
 #ifndef __CPU_SIMPLE_TIMING_HH__
 #define __CPU_SIMPLE_TIMING_HH__
 
+#include <list>
+
 #include "arch/generic/mmu.hh"
 #include "cpu/simple/base.hh"
 #include "cpu/simple/exec_context.hh"
@@ -49,6 +51,7 @@
 
 namespace gem5
 {
+
 
 class TimingSimpleCPU : public BaseSimpleCPU
 {
@@ -294,6 +297,14 @@ class TimingSimpleCPU : public BaseSimpleCPU
                    const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
+    struct item
+    {
+        Addr addr;
+        unsigned size;
+     };
+
+    std::list<PacketPtr> comparator_list;
+    void comparator();
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
                          AtomicOpFunctorPtr amo_op) override;
 
@@ -328,6 +339,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
     Fault initiateHtmCmd(Request::Flags flags) override;
 
     void htmSendAbortSignal(HtmFailureFaultCause) override;
+
 
   private:
 

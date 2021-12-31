@@ -260,6 +260,8 @@ class Request
         funcRequestorId = 1,
         /** This requestor id is used for message signaled interrupts */
         intRequestorId = 2,
+        /**/
+        dirtyRequestorId = 3,
         /**
          * Invalid requestor id for assertion checking only. It is
          * invalid behavior to ever send this id as part of a request.

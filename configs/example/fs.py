@@ -229,7 +229,6 @@ def build_test_system(np):
                 obj.eventq_index = 0
             cpu.eventq_index = i + 1
         test_sys.kvm_vm = KvmVM()
-
     return test_sys
 
 def build_drive_system(np):

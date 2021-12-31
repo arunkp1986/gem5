@@ -220,7 +220,6 @@ class BaseCPU : public ClockedObject
     inline void workItemEnd() { baseStats.numWorkItemsCompleted++; }
     // @todo remove me after debugging with legion done
     Tick instCount() { return instCnt; }
-
   protected:
     std::vector<BaseInterrupts*> interrupts;
 
