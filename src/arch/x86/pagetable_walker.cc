@@ -362,8 +362,20 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
       case LongPTE:
         DPRINTF(PageTableWalker,
                 "Got long mode PTE entry %#016x.\n", (uint64_t)pte);
-        doWrite = !pte.a;
-        pte.a = 1;
+        //doWrite = !pte.a;
+        //pte.a = 1;
+        if (!pte.a){
+            pte.a = 1;
+            doWrite = true;
+        }
+        if (!pte.d && mode == BaseMMU::Write){
+            //std::cout<<"inside dirty set"<<std::endl;
+            pte.d = 1;
+            doWrite = true;
+        }
+        DPRINTF(PageTableWalker,
+                "Got long mode PTE entry %#016x.\n", (uint64_t)pte);
+
         entry.writable = entry.writable && pte.w;
         entry.user = entry.user && pte.u;
         if (badNX || !pte.p) {
@@ -511,7 +523,22 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
       default:
         panic("Unknown page table walker state %d!\n");
     }
+
+    //If we didn't return, we're setting up another read.
+    //Request::Flags flags = oldRead->req->getFlags();
+
     if (doEndWalk) {
+        PacketPtr oldRead = read;
+        if (!functional && doWrite) {
+            write = oldRead;
+            write->setLE<uint64_t>(pte);
+            write->cmd = MemCmd::WriteReq;
+            read = NULL;
+        } else {
+            write = NULL;
+            //delete oldRead;
+        }
+
         if (doTLBInsert)
             if (!functional)
                 walker->tlb->insert(entry.vaddr, entry);
@@ -624,6 +651,7 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
         state = Waiting;
         assert(timingFault == NoFault || read == NULL);
         if (write) {
+            //write->flags.set(STATIC_DATA);
             writes.push_back(write);
         }
         sendPackets();
