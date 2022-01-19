@@ -1072,9 +1072,17 @@ class Packet : public Printable
     }
 
     void
-    setSize(unsigned size)
+    setTSize(unsigned size)
     {
-        assert(!flags.isSet(VALID_SIZE));
+        this->size = size;
+        flags.set(VALID_SIZE);
+        this->data = new uint8_t[getSize()];
+        flags.set(STATIC_DATA);
+    }
+
+    void
+    setSize(unsigned size)
+    {   assert(!flags.isSet(VALID_SIZE));
 
         this->size = size;
         flags.set(VALID_SIZE);

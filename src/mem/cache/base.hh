@@ -945,6 +945,11 @@ class BaseCache : public ClockedObject
      * never have to do any writebacks).
      */
     const bool isReadOnly;
+    /*
+     * This denotes whether to bypass the cache for dirty bitmaps store
+     * Added by KP Arun
+     * */
+    bool isBypassDirty;
 
     /**
      * when a data expansion of a compressed block happens it will not be
@@ -1165,10 +1170,10 @@ class BaseCache : public ClockedObject
 
     /*Added by KP Arun for testing*/
 
-    unsigned
-    getnumber() const
+    bool
+    getisBypassDirty()
     {
-        return 42;
+        return isBypassDirty;
     }
     /*Added by KP Arun for recvTimingReq wrapper*/
     void recvTimingReq_tracker(PacketPtr pkt){

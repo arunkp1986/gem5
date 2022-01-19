@@ -106,7 +106,7 @@ WriteQueueEntry::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
              "cacheable target", blkAddr);
     panic_if(!((target->isWrite() && _isUncacheable) ||
                (target->isEviction() && !_isUncacheable) ||
-               target->cmd == MemCmd::WriteClean),
+               target->cmd == MemCmd::WriteClean || target->getTracker()),
              "Write queue entry %#llx should be an uncacheable write or "
              "a cacheable eviction or a writeclean");
 

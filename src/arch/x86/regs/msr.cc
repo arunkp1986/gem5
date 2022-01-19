@@ -140,10 +140,10 @@ const MsrMap::value_type msrMapData[] = {
     MsrVal(0xC0010115, MISCREG_IGNNE),
     MsrVal(0xC0010116, MISCREG_SMM_CTL),
     MsrVal(0xC0010117, MISCREG_VM_HSAVE_PA),
-    MsrVal(0xC0010118, MISCREG_TRACK_START),
-    MsrVal(0xC0010119, MISCREG_TRACK_END),
-    MsrVal(0xC001011A, MISCREG_DIRTYMAP_ADDR),
-    MsrVal(0xC001011B, MISCREG_DIRTYMAP_SIZE)
+    MsrVal(0xD0010118, MISCREG_TRACK_START),
+    MsrVal(0xD0010120, MISCREG_TRACK_END),
+    MsrVal(0xD0010128, MISCREG_DIRTYMAP_ADDR),
+    MsrVal(0xD0010130, MISCREG_LOG_TRACK_GRAN)
 };
 
 static const unsigned msrMapSize = sizeof(msrMapData) / sizeof(msrMapData[0]);

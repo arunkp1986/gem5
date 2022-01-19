@@ -59,6 +59,10 @@ def _get_cache_opts(level, options):
     if hasattr(options, size_attr):
         opts['size'] = getattr(options, size_attr)
 
+    is_bypass_dirty_attr = '{}_is_bypass_dirty'.format(level)
+    if hasattr(options, is_bypass_dirty_attr):
+        opts['is_bypass_dirty'] = getattr(options, is_bypass_dirty_attr)
+
     assoc_attr = '{}_assoc'.format(level)
     if hasattr(options, assoc_attr):
         opts['assoc'] = getattr(options, assoc_attr)

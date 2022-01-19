@@ -56,6 +56,7 @@ class L1Cache(Cache):
 
 class L1_ICache(L1Cache):
     is_read_only = True
+    is_bypass_dirty = False
     # Writeback clean lines as well
     writeback_clean = True
 

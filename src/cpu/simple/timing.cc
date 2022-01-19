@@ -303,14 +303,25 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
 {
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
-
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
-    if (req->getVaddr() == (Addr)0x7FFFFFFA4 && pkt->isWrite()){
+
+    ThreadContext *tc = thread->getTC();
+    Addr stack_start = 0;
+    Addr stack_end = 0;
+    stack_start = (Addr)tc->readMiscRegNoEffect(
+                    gem5::X86ISA::MISCREG_TRACK_START);
+    stack_end = (Addr)tc->readMiscRegNoEffect(
+                    gem5::X86ISA::MISCREG_TRACK_END);
+
+    if ((stack_start <= req->getVaddr()) &&
+                    (req->getVaddr() <= stack_end) &&
+                    pkt->isWrite()){
         //&& pkt->isWrite()
        //here check whether the vaddr in req is of interest, if yes
        //copy the packet
        //and put into list
+       //std::cout<<"send Data stack_start:"<<std::hex<<stack_start<<std::endl;
        DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
        PacketPtr tracker_pkt = new Packet(pkt,0,1);
        comparator_list.push_front(tracker_pkt);
@@ -543,6 +554,8 @@ TimingSimpleCPU::handleWritePacket()
     return dcache_pkt == NULL;
 }
 /*Added by KP Arun.*/
+std::unordered_map<uint32_t,uint32_t> dirty_value_map;
+std::unordered_map<uint32_t,PacketPtr> dirty_tracker_pkt;
 void
 TimingSimpleCPU::comparator(){
     //struct item temp = comparator_list.back();
@@ -551,56 +564,126 @@ TimingSimpleCPU::comparator(){
     SimpleThread* thread = t_info.thread;
     ThreadContext *tc = thread->getTC();
     Addr tracking_address = 0;
-    tracking_address = tc->readMiscRegNoEffect(
-                    gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
-    if (tracking_address){
+    Addr dirty_address = 0;
+    Addr virtual_address = 0;
+    Addr stack_start = 0;
+    //Addr stack_end = 0;
+    uint16_t tracking_log_gran = 0;
+    PacketPtr dirty_pkt = NULL;
+    stack_start = (Addr)tc->readMiscRegNoEffect(\
+                  gem5::X86ISA::MISCREG_TRACK_START);
+    //stack_end = (Addr)tc->readMiscRegNoEffect(
+    //		  gem5::X86ISA::MISCREG_TRACK_END);
+    tracking_address = tc->readMiscRegNoEffect(\
+                  gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+    tracking_log_gran = tc->readMiscRegNoEffect(\
+                  gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
+    if (tracking_address && tracking_log_gran){
         PacketPtr tracker_pkt = comparator_list.back();
         RequestPtr tracker_req = tracker_pkt->req;
         comparator_list.pop_back();
-         //unsigned data_size = 4;
-        uint8_t bitmap[4] = {'a','b','c','d'};
-        //Request::Flags tracker_flags;
-        tracker_req->setFlags(Request::PHYSICAL);
-        tracker_req->setPaddr(tracking_address);
-        tracker_pkt->setAddr(tracking_address);
-        tracker_pkt->setData(bitmap);
-        tracker_pkt->setTracker(1);
-        //std::memcpy(tracker_pkt->data,bitmap,tracker_pkt->getSize());
-        //tracker_pkt->dataDynamic<uint8_t>(bitmap);
-        //RequestorID tracker_id = Request::dirtyRequestorId;
-        if (!dcachePort.sendTimingReq(tracker_pkt)) {
-            DPRINTF(Stackp, "sending failed\n");
-            _status = DcacheRetry;
-        } else {
-            DPRINTF(Stackp, "setting DcacheWaitResponse\n");
-            _status = DcacheWaitResponse;
-            //tracker_pkt->makeResponse();
-            //completeDataAccess(tracker_pkt);
-        // memory system takes ownership of packet
-        //tracker_pkt = NULL;
-       }
+        virtual_address = tracker_req->getVaddr();
+        uint64_t stack_byte_offset = virtual_address - stack_start;
+        uint32_t dirty_bit_pos = \
+                (stack_byte_offset >> tracking_log_gran);
+        uint32_t dirty_bitmap_pos = dirty_bit_pos>>5;
+        /*std::cout<<"dirty_value:"
+         * <<std::hex<<dirty_value_map[dirty_bitmap_pos]
+         * <<std::endl;*/
+
+        if (dirty_value_map.find(dirty_bitmap_pos) == dirty_value_map.end()){
+            dirty_value_map[dirty_bitmap_pos] = 0;
+            dirty_value_map[dirty_bitmap_pos] |=\
+                        1<<(31-(dirty_bit_pos%32));
+        }
+        else{
+            dirty_value_map[dirty_bitmap_pos] |=\
+                        1<<(31-(dirty_bit_pos%32));
+        }
+        uint8_t bitmap_value[4];
+        /*std::cout<<"tracking_address:"
+        <<std::hex<<tracking_address<<std::endl;
+        //std::cout<<"virtual_address:"
+        //<<std::hex<<virtual_address<<std::endl;
+        //std::cout<<"stack_start:"
+        //<<std::hex<<stack_start<<std::endl;
+        //std::cout<<"stack_byte_offset:"
+        //<<std::hex<<stack_byte_offset<<std::endl;
+        //std::cout<<"dirty_bit_pos:"
+        //<<std::hex<<dirty_bit_pos<<std::endl;
+        //std::cout<<"dirty_bitmap_pos:"
+        //<<std::hex<<dirty_bitmap_pos<<std::endl;
+        //std::cout<<"dirty_value:"
+        //<<std::hex<<dirty_value_map[dirty_bitmap_pos]
+        //<<std::endl;
+        */
+        if (dirty_tracker_pkt.find(dirty_bitmap_pos) ==\
+                            dirty_tracker_pkt.end()){
+            dirty_address = (Addr)(tracking_address+\
+                             (4*dirty_bitmap_pos));
+            memcpy(bitmap_value,&(dirty_value_map[dirty_bitmap_pos]),4);
+            tracker_req->setFlags(Request::PHYSICAL);
+            tracker_req->setPaddr(dirty_address);
+            tracker_pkt->setAddr(dirty_address);
+            tracker_pkt->setTSize(4);
+            tracker_pkt->setData(bitmap_value);
+            tracker_pkt->setTracker(1);
+            dirty_tracker_pkt[dirty_bitmap_pos] = tracker_pkt ;
+        }
+        else{
+            dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
+            memcpy(bitmap_value,&(dirty_value_map[dirty_bitmap_pos]),4);
+            dirty_tracker_pkt[dirty_bitmap_pos]->setData(bitmap_value);
+        }
     }
-/*
-    if (tracking_address){
-        //RequestPtr tracker_req = std::make_shared<Request>(tracking_address,
-        //data_size, tracker_flags, tracker_id);
-        //PacketPtr tracker_pkt = Packet::createWrite(tracker_req);
-        //tracker_pkt->allocate();
-        //tracker_pkt->setData(bitmap);
-        if (!dcachePort.sendTimingReq(tracker_pkt)) {
-            DPRINTF(Stackp, "sending failed\n");
-            _status = DcacheRetry;
-        } else {
-            DPRINTF(Stackp, "setting DcacheWaitResponse\n");
-            _status = DcacheWaitResponse;
-            completeDataAccess(tracker_pkt);
-        // memory system takes ownership of packet
-        //tracker_pkt = NULL;
-       }
-        //dcache_pkt = tracker_pkt;
-          //  handleWritePacket();
-           // threadSnoop(tracker_pkt, curThread);
-    }*/
+
+                /*memcpy(bitmap_value,&(it->second),4);
+                memcpy(bitmap_value,&(dirty_value_map[dirty_bitmap_pos]),4);
+                dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
+                std::cout<<"tracking_address:"
+                <<std::hex<<tracking_address<<std::endl;
+                std::cout<<"virtual_address:"
+                <<std::hex<<virtual_address<<std::endl;
+                std::cout<<"stack_start:"
+                <<std::hex<<stack_start
+                <<std::endl;
+                std::cout<<"stack_byte_offset:"
+                <<std::hex<<stack_byte_offset
+                <<std::endl;
+                std::cout<<"dirty_bit_pos:"
+                <<std::hex<<dirty_bit_pos<<std::endl;
+                std::cout<<"dirty_bitmap_pos:"
+                <<std::hex<<dirty_bitmap_pos<<std::endl;
+                std::cout<<"dirty_address:"
+                <<std::hex<<dirty_address<<std::endl;
+                std::cout<<"dirty_value:"
+                <<std::hex<<dirty_value_map[dirty_bitmap_pos]<<std::endl;
+                tracker_req->setFlags(Request::PHYSICAL);
+                tracker_req->setPaddr(dirty_address);
+                tracker_pkt->setAddr(dirty_address);
+                tracker_pkt->setTSize(4);
+                tracker_pkt->setData(bitmap_value);
+                std::cout<<"size:"<<tracker_pkt->getSize()<<std::endl;
+                tracker_pkt->setTracker(1);*/
+        else{
+        std::unordered_map<uint32_t,PacketPtr>:: iterator it;
+        //it = dirty_tracker_pkt.begin();
+        for (it = dirty_tracker_pkt.begin();\
+                  it != dirty_tracker_pkt.end();\
+                  it++){
+                if (it->second != 0){
+                dirty_pkt = new Packet(it->second,0,1);
+                if (!dcachePort.sendTimingReq(dirty_pkt)) {
+                    DPRINTF(Stackp, "sending failed\n");
+                    _status = DcacheRetry;
+                } else {
+                    DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+                    _status = DcacheWaitResponse;
+               }
+                it->second = 0;
+              }
+           }
+        }
     return;
 }
 

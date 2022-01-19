@@ -95,6 +95,7 @@ class BaseCache(ClockedObject):
     write_buffers = Param.Unsigned(8, "Number of write buffers")
 
     is_read_only = Param.Bool(False, "Is this cache read only (e.g. inst)")
+    is_bypass_dirty = Param.Bool(False, "bypass dirty bitmap store")
 
     prefetcher = Param.BasePrefetcher(NULL,"Prefetcher attached to cache")
     prefetch_on_access = Param.Bool(False,

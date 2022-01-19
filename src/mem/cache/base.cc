@@ -104,6 +104,7 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       forwardSnoops(true),
       clusivity(p.clusivity),
       isReadOnly(p.is_read_only),
+      isBypassDirty(p.is_bypass_dirty),
       replaceExpansions(p.replace_expansions),
       moveContractions(p.move_contractions),
       blocked(0),
@@ -268,7 +269,8 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
                                    pkt->getBlockAddr(blkSize));
     }
     if (pkt->isWrite()){
-       // DPRINTF(Stackp, "base cache handleTimingReqMiss for write\n");
+        //allocateWriteBuffer(pkt, forward_time);
+
     }
 
     if (mshr) {
@@ -325,7 +327,8 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
         if (prefetcher && pkt->isDemand())
             prefetcher->incrDemandMhsrMisses();
 
-        if (pkt->isEviction() || pkt->cmd == MemCmd::WriteClean) {
+        if (pkt->isEviction() || pkt->cmd == MemCmd::WriteClean ||\
+           (getisBypassDirty() && pkt->getTracker())) {
             // We use forward_time here because there is an
             // writeback or writeclean, forwarded to WriteBuffer.
             allocateWriteBuffer(pkt, forward_time);
@@ -448,6 +451,13 @@ BaseCache::recvTimingResp(PacketPtr pkt)
 
     DPRINTF(Cache, "%s: Handling response %s\n", __func__,
             pkt->print());
+    //Added by KP Arun
+    if (pkt->isWrite() && pkt->getTracker() && getisBypassDirty()){
+        //std::cout<<"got tracker response"<<std::endl;
+        //assert(pkt->req->isUncacheable());
+        handleUncacheableWriteResp(pkt);
+        return;
+    }
 
     // if this is a write, we should be looking at an uncacheable
     // write
@@ -2462,6 +2472,11 @@ bool
 BaseCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
 {
     assert(pkt->isRequest());
+    /*if (cache->isBypassDirty && pkt->getTracker()){
+        bool success = cache->memSidePort.sendTimingReq(pkt);
+        assert(success);
+        return true;
+    }*/
     if (cache->system->bypassCaches()) {
         // Just forward the packet if caches are disabled.
         // @todo This should really enqueue the packet rather
