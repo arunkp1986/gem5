@@ -86,7 +86,8 @@ BaseSimpleCPU::BaseSimpleCPU(const BaseSimpleCPUParams &p)
       branchPred(p.branchPred),
       zeroReg(p.isa[0]->regClasses().at(IntRegClass).zeroReg()),
       traceData(NULL),
-      _status(Idle)
+      _status(Idle),
+      _trackerstatus(Idle)
 {
     SimpleThread *thread;
 

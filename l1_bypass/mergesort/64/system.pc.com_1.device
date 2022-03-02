@@ -1,0 +1,534 @@
+            Starting IITK gemOS ......
+Initial Segment Map: cs = 0x8 ds = 0x10 ss = 0x10
+ESP=0x1130D8 EBP=0x113148
+cr0=0xE0000011 cr3=0x70000 cr4=0x20
+Initializing memory
+base = 0x0 limit low = 0x0 high=0x0 ac_byte = 0x0 flags=0x0
+base = 0x0 limit low = 0xFFFF high=0xF ac_byte = 0x9A flags=0xA
+base = 0x0 limit low = 0xFFFF high=0xF ac_byte = 0x92 flags=0xE
+base = 0x0 limit low = 0xFFFF high=0xF ac_byte = 0x8B flags=0xA
+Initializing user segments
+Initializing APIC
+gemOS shell... 
+GemOS# Setting up init process ...
+Page table setup done, launching init ...
+dirty tracking on
+dirty tracking on
+dirty bitmap address:0x682EFFC value:0x3FF
+dirty bitmap address:0x682F000 value:0xC0000000
+dirty bitmap address:0x682F004 value:0x3F0
+dirty bitmap address:0x682F00C value:0x3F0
+dirty bitmap address:0x682F014 value:0x3F0
+dirty bitmap address:0x682F01C value:0x3F0
+dirty bitmap address:0x682F024 value:0x3F0
+dirty bitmap address:0x682F02C value:0x3F0
+dirty bitmap address:0x682F034 value:0x3F0
+dirty bitmap address:0x682F03C value:0x3F0
+dirty bitmap address:0x682F044 value:0x3F0
+dirty bitmap address:0x682F04C value:0x3F0
+dirty bitmap address:0x682F054 value:0x3F0
+dirty bitmap address:0x682F05C value:0x3F0
+dirty bitmap address:0x682F064 value:0x3F0
+dirty bitmap address:0x682F06C value:0x3F0
+dirty bitmap address:0x682F074 value:0x3F0
+dirty bitmap address:0x682F07C value:0x3F0
+dirty bitmap address:0x682F084 value:0x3F0
+dirty bitmap address:0x682F08C value:0x3F0
+dirty bitmap address:0x682F094 value:0x3F0
+dirty bitmap address:0x682F09C value:0x3F0
+dirty bitmap address:0x682F0A4 value:0x3F0
+dirty bitmap address:0x682F0AC value:0x3F0
+dirty bitmap address:0x682F0B4 value:0x3F0
+dirty bitmap address:0x682F0BC value:0x3F0
+dirty bitmap address:0x682F0C4 value:0x3F0
+dirty bitmap address:0x682F0CC value:0x3F0
+dirty bitmap address:0x682F0D4 value:0x3F0
+dirty bitmap address:0x682F0DC value:0x3F0
+dirty bitmap address:0x682F0E4 value:0x3F0
+dirty bitmap address:0x682F0EC value:0x3F0
+dirty bitmap address:0x682F0F4 value:0x3F0
+dirty bitmap address:0x682F0FC value:0x3F0
+dirty bitmap address:0x682F104 value:0x3F0
+dirty bitmap address:0x682F10C value:0x3F0
+dirty bitmap address:0x682F114 value:0x3F0
+dirty bitmap address:0x682F11C value:0x3F0
+dirty bitmap address:0x682F124 value:0x3F0
+dirty bitmap address:0x682F12C value:0x3F0
+dirty bitmap address:0x682F134 value:0x3F0
+dirty bitmap address:0x682F13C value:0x3F0
+dirty bitmap address:0x682F144 value:0x3F0
+dirty bitmap address:0x682F14C value:0x3F0
+dirty bitmap address:0x682F154 value:0x3F0
+dirty bitmap address:0x682F15C value:0x3F0
+dirty bitmap address:0x682F164 value:0x3F0
+dirty bitmap address:0x682F16C value:0x3F0
+dirty bitmap address:0x682F174 value:0x3F0
+dirty bitmap address:0x682F17C value:0x3F0
+dirty bitmap address:0x682F184 value:0x3F0
+dirty bitmap address:0x682F18C value:0x3F0
+dirty bitmap address:0x682F194 value:0x3F0
+dirty bitmap address:0x682F19C value:0x3F0
+dirty bitmap address:0x682F1A4 value:0x3F0
+dirty bitmap address:0x682F1AC value:0x3F0
+dirty bitmap address:0x682F1B4 value:0x3F0
+dirty bitmap address:0x682F1BC value:0x3F0
+dirty bitmap address:0x682F1C4 value:0x3F0
+dirty bitmap address:0x682F1CC value:0x3F0
+dirty bitmap address:0x682F1D4 value:0x3F0
+dirty bitmap address:0x682F1DC value:0x3F0
+dirty bitmap address:0x682F1E4 value:0x3F0
+dirty bitmap address:0x682F1EC value:0x3F0
+dirty bitmap address:0x682F1F4 value:0x3F0
+dirty bitmap address:0x682F1FC value:0x3F0
+dirty bitmap address:0x682F204 value:0x3F0
+dirty bitmap address:0x682F20C value:0x3F0
+dirty bitmap address:0x682F214 value:0x3F0
+dirty bitmap address:0x682F21C value:0x3F0
+dirty bitmap address:0x682F224 value:0x3F0
+dirty bitmap address:0x682F22C value:0x3F0
+dirty bitmap address:0x682F234 value:0x3F0
+dirty bitmap address:0x682F23C value:0x3F0
+dirty bitmap address:0x682F244 value:0x3F0
+dirty bitmap address:0x682F24C value:0x3F0
+dirty bitmap address:0x682F254 value:0x3F0
+dirty bitmap address:0x682F25C value:0x3F0
+dirty bitmap address:0x682F264 value:0x3F0
+dirty bitmap address:0x682F26C value:0x3F0
+dirty bitmap address:0x682F274 value:0x3F0
+dirty bitmap address:0x682F27C value:0x3F0
+dirty bitmap address:0x682F284 value:0x3F0
+dirty bitmap address:0x682F28C value:0x3F0
+dirty bitmap address:0x682F294 value:0x3F0
+dirty bitmap address:0x682F29C value:0x3F0
+dirty bitmap address:0x682F2A4 value:0x3F0
+dirty bitmap address:0x682F2AC value:0x3F0
+dirty bitmap address:0x682F2B4 value:0x3F0
+dirty bitmap address:0x682F2BC value:0x3F0
+dirty bitmap address:0x682F2C4 value:0x3F0
+dirty bitmap address:0x682F2CC value:0x3F0
+dirty bitmap address:0x682F2D4 value:0x3F0
+dirty bitmap address:0x682F2DC value:0x3F0
+dirty bitmap address:0x682F2E4 value:0x3F0
+dirty bitmap address:0x682F2EC value:0x3F0
+dirty bitmap address:0x682F2F4 value:0x3F0
+dirty bitmap address:0x682F2FC value:0x3F0
+dirty bitmap address:0x682F304 value:0x3F0
+dirty bitmap address:0x682F30C value:0x3F0
+dirty bitmap address:0x682F314 value:0x3F0
+dirty bitmap address:0x682F31C value:0x3F0
+dirty bitmap address:0x682F324 value:0x3F0
+dirty bitmap address:0x682F32C value:0x3F0
+dirty bitmap address:0x682F334 value:0x3F0
+dirty bitmap address:0x682F33C value:0x3F0
+dirty bitmap address:0x682F344 value:0x3F0
+dirty bitmap address:0x682F34C value:0x3F0
+dirty bitmap address:0x682F354 value:0x3F0
+dirty bitmap address:0x682F35C value:0x3F0
+dirty bitmap address:0x682F364 value:0x3F0
+dirty bitmap address:0x682F36C value:0x3F0
+dirty bitmap address:0x682F374 value:0x3F0
+dirty bitmap address:0x682F37C value:0x3F0
+dirty bitmap address:0x682F384 value:0x3F0
+dirty bitmap address:0x682F38C value:0x3F0
+dirty bitmap address:0x682F394 value:0x3F0
+dirty bitmap address:0x682F39C value:0x3F0
+dirty bitmap address:0x682F3A4 value:0x3F0
+dirty bitmap address:0x682F3AC value:0x3F0
+dirty bitmap address:0x682F3B4 value:0x3F0
+dirty bitmap address:0x682F3BC value:0x3F0
+dirty bitmap address:0x682F3C4 value:0x3F0
+dirty bitmap address:0x682F3CC value:0x3F0
+dirty bitmap address:0x682F3D4 value:0x3F0
+dirty bitmap address:0x682F3DC value:0x3F0
+dirty bitmap address:0x682F3E4 value:0x3F0
+dirty bitmap address:0x682F3EC value:0x3F0
+dirty bitmap address:0x682F3F4 value:0x3F0
+dirty bitmap address:0x682F3FC value:0x3F0
+dirty bitmap address:0x682F404 value:0x3F0
+dirty bitmap address:0x682F40C value:0x3F0
+dirty bitmap address:0x682F414 value:0x3F0
+dirty bitmap address:0x682F41C value:0x3F0
+dirty bitmap address:0x682F424 value:0x3F0
+dirty bitmap address:0x682F42C value:0x3F0
+dirty bitmap address:0x682F434 value:0x3F0
+dirty bitmap address:0x682F43C value:0x3F0
+dirty bitmap address:0x682F444 value:0x3F0
+dirty bitmap address:0x682F44C value:0x3F0
+dirty bitmap address:0x682F454 value:0x3F0
+dirty bitmap address:0x682F45C value:0x3F0
+dirty bitmap address:0x682F464 value:0x3F0
+dirty bitmap address:0x682F46C value:0x3F0
+dirty bitmap address:0x682F474 value:0x3F0
+dirty bitmap address:0x682F47C value:0x3F0
+dirty bitmap address:0x682F484 value:0x3F0
+dirty bitmap address:0x682F48C value:0x3F0
+dirty bitmap address:0x682F494 value:0x3F0
+dirty bitmap address:0x682F49C value:0x3F0
+dirty bitmap address:0x682F4A4 value:0x3F0
+dirty bitmap address:0x682F4AC value:0x3F0
+dirty bitmap address:0x682F4B4 value:0x3F0
+dirty bitmap address:0x682F4BC value:0x3F0
+dirty bitmap address:0x682F4C4 value:0x3F0
+dirty bitmap address:0x682F4CC value:0x3F0
+dirty bitmap address:0x682F4D4 value:0x3F0
+dirty bitmap address:0x682F4DC value:0x3F0
+dirty bitmap address:0x682F4E4 value:0x3F0
+dirty bitmap address:0x682F4EC value:0x3F0
+dirty bitmap address:0x682F4F4 value:0x3F0
+dirty bitmap address:0x682F4FC value:0x3F0
+dirty bitmap address:0x682F504 value:0x3F0
+dirty bitmap address:0x682F50C value:0x3F0
+dirty bitmap address:0x682F514 value:0x3F0
+dirty bitmap address:0x682F51C value:0x3F0
+dirty bitmap address:0x682F524 value:0x3F0
+dirty bitmap address:0x682F52C value:0x3F0
+dirty bitmap address:0x682F534 value:0x3F0
+dirty bitmap address:0x682F53C value:0x3F0
+dirty bitmap address:0x682F544 value:0x3F0
+dirty bitmap address:0x682F54C value:0x3F0
+dirty bitmap address:0x682F554 value:0x3F0
+dirty bitmap address:0x682F55C value:0x3F0
+dirty bitmap address:0x682F564 value:0x3F0
+dirty bitmap address:0x682F56C value:0x3F0
+dirty bitmap address:0x682F574 value:0x3F0
+dirty bitmap address:0x682F57C value:0x3F0
+dirty bitmap address:0x682F584 value:0x3F0
+dirty bitmap address:0x682F58C value:0x3F0
+dirty bitmap address:0x682F594 value:0x3F0
+dirty bitmap address:0x682F59C value:0x3F0
+dirty bitmap address:0x682F5A4 value:0x3F0
+dirty bitmap address:0x682F5AC value:0x3F0
+dirty bitmap address:0x682F5B4 value:0x3F0
+dirty bitmap address:0x682F5BC value:0x3F0
+dirty bitmap address:0x682F5C4 value:0x3F0
+dirty bitmap address:0x682F5CC value:0x3F0
+dirty bitmap address:0x682F5D4 value:0x3F0
+dirty bitmap address:0x682F5DC value:0x3F0
+dirty bitmap address:0x682F5E4 value:0x3F0
+dirty bitmap address:0x682F5EC value:0x3F0
+dirty bitmap address:0x682F5F4 value:0x3F0
+dirty bitmap address:0x682F5FC value:0x3F0
+dirty bitmap address:0x682F604 value:0x3F0
+dirty bitmap address:0x682F60C value:0x3F0
+dirty bitmap address:0x682F614 value:0x3F0
+dirty bitmap address:0x682F61C value:0x3F0
+dirty bitmap address:0x682F624 value:0x3F0
+dirty bitmap address:0x682F62C value:0x3F0
+dirty bitmap address:0x682F634 value:0x3F0
+dirty bitmap address:0x682F63C value:0x3F0
+dirty bitmap address:0x682F644 value:0x3F0
+dirty bitmap address:0x682F64C value:0x3F0
+dirty bitmap address:0x682F654 value:0x3F0
+dirty bitmap address:0x682F65C value:0x3F0
+dirty bitmap address:0x682F664 value:0x3F0
+dirty bitmap address:0x682F66C value:0x3F0
+dirty bitmap address:0x682F674 value:0x3F0
+dirty bitmap address:0x682F67C value:0x3F0
+dirty bitmap address:0x682F684 value:0x3F0
+dirty bitmap address:0x682F68C value:0x3F0
+dirty bitmap address:0x682F694 value:0x3F0
+dirty bitmap address:0x682F69C value:0x3F0
+dirty bitmap address:0x682F6A4 value:0x3F0
+dirty bitmap address:0x682F6AC value:0x3F0
+dirty bitmap address:0x682F6B4 value:0x3F0
+dirty bitmap address:0x682F6BC value:0x3F0
+dirty bitmap address:0x682F6C4 value:0x3F0
+dirty bitmap address:0x682F6CC value:0x3F0
+dirty bitmap address:0x682F6D4 value:0x3F0
+dirty bitmap address:0x682F6DC value:0x3F0
+dirty bitmap address:0x682F6E4 value:0x3F0
+dirty bitmap address:0x682F6EC value:0x3F0
+dirty bitmap address:0x682F6F4 value:0x3F0
+dirty bitmap address:0x682F6FC value:0x3F0
+dirty bitmap address:0x682F704 value:0x3F0
+dirty bitmap address:0x682F70C value:0x3F0
+dirty bitmap address:0x682F714 value:0x3F0
+dirty bitmap address:0x682F71C value:0x3F0
+dirty bitmap address:0x682F724 value:0x3F0
+dirty bitmap address:0x682F72C value:0x3F0
+dirty bitmap address:0x682F734 value:0x3F0
+dirty bitmap address:0x682F73C value:0x3F0
+dirty bitmap address:0x682F744 value:0x3F0
+dirty bitmap address:0x682F74C value:0x3F0
+dirty bitmap address:0x682F754 value:0x3F0
+dirty bitmap address:0x682F75C value:0x3F0
+dirty bitmap address:0x682F764 value:0x3F0
+dirty bitmap address:0x682F76C value:0x3F0
+dirty bitmap address:0x682F774 value:0x3F0
+dirty bitmap address:0x682F77C value:0x3F0
+dirty bitmap address:0x682F784 value:0x3F0
+dirty bitmap address:0x682F78C value:0x3F0
+dirty bitmap address:0x682F794 value:0x3F0
+dirty bitmap address:0x682F79C value:0x3F0
+dirty bitmap address:0x682F7A4 value:0x3F0
+dirty bitmap address:0x682F7AC value:0x3F0
+dirty bitmap address:0x682F7B4 value:0x3F0
+dirty bitmap address:0x682F7BC value:0x3F0
+dirty bitmap address:0x682F7C4 value:0x3F0
+dirty bitmap address:0x682F7CC value:0x3F0
+dirty bitmap address:0x682F7D4 value:0x3F0
+dirty bitmap address:0x682F7DC value:0x3F0
+dirty bitmap address:0x682F7E4 value:0x3F0
+dirty bitmap address:0x682F7EC value:0x3F0
+dirty bitmap address:0x682F7F4 value:0x3F0
+dirty bitmap address:0x682F7FC value:0x3F0
+dirty bitmap address:0x682F804 value:0x3F0
+dirty bitmap address:0x682F80C value:0x3F0
+dirty bitmap address:0x682F814 value:0x3F0
+dirty bitmap address:0x682F81C value:0x3F0
+dirty bitmap address:0x682F824 value:0x3F0
+dirty bitmap address:0x682F82C value:0x3F0
+dirty bitmap address:0x682F834 value:0x3F0
+dirty bitmap address:0x682F83C value:0x3F0
+dirty bitmap address:0x682F844 value:0x3F0
+dirty bitmap address:0x682F84C value:0x3F0
+dirty bitmap address:0x682F854 value:0x3F0
+dirty bitmap address:0x682F85C value:0x3F0
+dirty bitmap address:0x682F864 value:0x3F0
+dirty bitmap address:0x682F86C value:0x3F0
+dirty bitmap address:0x682F874 value:0x3F0
+dirty bitmap address:0x682F87C value:0x3F0
+dirty bitmap address:0x682F884 value:0x3F0
+dirty bitmap address:0x682F88C value:0x3F0
+dirty bitmap address:0x682F894 value:0x3F0
+dirty bitmap address:0x682F89C value:0x3F0
+dirty bitmap address:0x682F8A4 value:0x3F0
+dirty bitmap address:0x682F8AC value:0x3F0
+dirty bitmap address:0x682F8B4 value:0x3F0
+dirty bitmap address:0x682F8BC value:0x3F0
+dirty bitmap address:0x682F8C4 value:0x3F0
+dirty bitmap address:0x682F8CC value:0x3F0
+dirty bitmap address:0x682F8D4 value:0x3F0
+dirty bitmap address:0x682F8DC value:0x3F0
+dirty bitmap address:0x682F8E4 value:0x3F0
+dirty bitmap address:0x682F8EC value:0x3F0
+dirty bitmap address:0x682F8F4 value:0x3F0
+dirty bitmap address:0x682F8FC value:0x3F0
+dirty bitmap address:0x682F904 value:0x3F0
+dirty bitmap address:0x682F90C value:0x3F0
+dirty bitmap address:0x682F914 value:0x3F0
+dirty bitmap address:0x682F91C value:0x3F0
+dirty bitmap address:0x682F924 value:0x3F0
+dirty bitmap address:0x682F92C value:0x3F0
+dirty bitmap address:0x682F934 value:0x3F0
+dirty bitmap address:0x682F93C value:0x3F0
+dirty bitmap address:0x682F944 value:0x3F0
+dirty bitmap address:0x682F94C value:0x3F0
+dirty bitmap address:0x682F954 value:0x3F0
+dirty bitmap address:0x682F95C value:0x3F0
+dirty bitmap address:0x682F964 value:0x3F0
+dirty bitmap address:0x682F96C value:0x3F0
+dirty bitmap address:0x682F974 value:0x3F0
+dirty bitmap address:0x682F97C value:0x3F0
+dirty bitmap address:0x682F984 value:0x3F0
+dirty bitmap address:0x682F98C value:0x3F0
+dirty bitmap address:0x682F994 value:0x3F0
+dirty bitmap address:0x682F99C value:0x3F0
+dirty bitmap address:0x682F9A4 value:0x3F0
+dirty bitmap address:0x682F9AC value:0x3F0
+dirty bitmap address:0x682F9B4 value:0x3F0
+dirty bitmap address:0x682F9BC value:0x3F0
+dirty bitmap address:0x682F9C4 value:0x3F0
+dirty bitmap address:0x682F9CC value:0x3F0
+dirty bitmap address:0x682F9D4 value:0x3F0
+dirty bitmap address:0x682F9DC value:0x3F0
+dirty bitmap address:0x682F9E4 value:0x3F0
+dirty bitmap address:0x682F9EC value:0x3F0
+dirty bitmap address:0x682F9F4 value:0x3F0
+dirty bitmap address:0x682F9FC value:0x3F0
+dirty bitmap address:0x682FA04 value:0x3F0
+dirty bitmap address:0x682FA0C value:0x3F0
+dirty bitmap address:0x682FA14 value:0x3F0
+dirty bitmap address:0x682FA1C value:0x3F0
+dirty bitmap address:0x682FA24 value:0x3F0
+dirty bitmap address:0x682FA2C value:0x3F0
+dirty bitmap address:0x682FA34 value:0x3F0
+dirty bitmap address:0x682FA3C value:0x3F0
+dirty bitmap address:0x682FA44 value:0x3F0
+dirty bitmap address:0x682FA4C value:0x3F0
+dirty bitmap address:0x682FA54 value:0x3F0
+dirty bitmap address:0x682FA5C value:0x3F0
+dirty bitmap address:0x682FA64 value:0x3F0
+dirty bitmap address:0x682FA6C value:0x3F0
+dirty bitmap address:0x682FA74 value:0x3F0
+dirty bitmap address:0x682FA7C value:0x3F0
+dirty bitmap address:0x682FA84 value:0x3F0
+dirty bitmap address:0x682FA8C value:0x3F0
+dirty bitmap address:0x682FA94 value:0x3F0
+dirty bitmap address:0x682FA9C value:0x3F0
+dirty bitmap address:0x682FAA4 value:0x3F0
+dirty bitmap address:0x682FAAC value:0x3F0
+dirty bitmap address:0x682FAB4 value:0x3F0
+dirty bitmap address:0x682FABC value:0x3F0
+dirty bitmap address:0x682FAC4 value:0x3F0
+dirty bitmap address:0x682FACC value:0x3F0
+dirty bitmap address:0x682FAD4 value:0x3F0
+dirty bitmap address:0x682FADC value:0x3F0
+dirty bitmap address:0x682FAE4 value:0x3F0
+dirty bitmap address:0x682FAEC value:0x3F0
+dirty bitmap address:0x682FAF4 value:0x3F0
+dirty bitmap address:0x682FAFC value:0x3F0
+dirty bitmap address:0x682FB04 value:0x3F0
+dirty bitmap address:0x682FB0C value:0x3F0
+dirty bitmap address:0x682FB14 value:0x3F0
+dirty bitmap address:0x682FB1C value:0x3F0
+dirty bitmap address:0x682FB24 value:0x3F0
+dirty bitmap address:0x682FB2C value:0x3F0
+dirty bitmap address:0x682FB34 value:0x3F0
+dirty bitmap address:0x682FB3C value:0x3F0
+dirty bitmap address:0x682FB44 value:0x3F0
+dirty bitmap address:0x682FB4C value:0x3F0
+dirty bitmap address:0x682FB54 value:0x3F0
+dirty bitmap address:0x682FB5C value:0x3F0
+dirty bitmap address:0x682FB64 value:0x3F0
+dirty bitmap address:0x682FB6C value:0x3F0
+dirty bitmap address:0x682FB74 value:0x3F0
+dirty bitmap address:0x682FB7C value:0x3F0
+dirty bitmap address:0x682FB84 value:0x3F0
+dirty bitmap address:0x682FB8C value:0x3F0
+dirty bitmap address:0x682FB94 value:0x3F0
+dirty bitmap address:0x682FB9C value:0x3F0
+dirty bitmap address:0x682FBA4 value:0x3F0
+dirty bitmap address:0x682FBAC value:0x3F0
+dirty bitmap address:0x682FBB4 value:0x3F0
+dirty bitmap address:0x682FBBC value:0x3F0
+dirty bitmap address:0x682FBC4 value:0x3F0
+dirty bitmap address:0x682FBCC value:0x3F0
+dirty bitmap address:0x682FBD4 value:0x3F0
+dirty bitmap address:0x682FBDC value:0x3F0
+dirty bitmap address:0x682FBE4 value:0x3F0
+dirty bitmap address:0x682FBEC value:0x3F0
+dirty bitmap address:0x682FBF4 value:0x3F0
+dirty bitmap address:0x682FBFC value:0x3F0
+dirty bitmap address:0x682FC04 value:0x3F0
+dirty bitmap address:0x682FC0C value:0x3F0
+dirty bitmap address:0x682FC14 value:0x3F0
+dirty bitmap address:0x682FC1C value:0x3F0
+dirty bitmap address:0x682FC24 value:0x3F0
+dirty bitmap address:0x682FC2C value:0x3F0
+dirty bitmap address:0x682FC34 value:0x3F0
+dirty bitmap address:0x682FC3C value:0x3F0
+dirty bitmap address:0x682FC44 value:0x3F0
+dirty bitmap address:0x682FC4C value:0x3F0
+dirty bitmap address:0x682FC54 value:0x3F0
+dirty bitmap address:0x682FC5C value:0x3F0
+dirty bitmap address:0x682FC64 value:0x3F0
+dirty bitmap address:0x682FC6C value:0x3F0
+dirty bitmap address:0x682FC74 value:0x3F0
+dirty bitmap address:0x682FC7C value:0x3F0
+dirty bitmap address:0x682FC84 value:0x3F0
+dirty bitmap address:0x682FC8C value:0x3F0
+dirty bitmap address:0x682FC94 value:0x3F0
+dirty bitmap address:0x682FC9C value:0x3F0
+dirty bitmap address:0x682FCA4 value:0x3F0
+dirty bitmap address:0x682FCAC value:0x3F0
+dirty bitmap address:0x682FCB4 value:0x3F0
+dirty bitmap address:0x682FCBC value:0x3F0
+dirty bitmap address:0x682FCC4 value:0x3F0
+dirty bitmap address:0x682FCCC value:0x3F0
+dirty bitmap address:0x682FCD4 value:0x3F0
+dirty bitmap address:0x682FCDC value:0x3F0
+dirty bitmap address:0x682FCE4 value:0x3F0
+dirty bitmap address:0x682FCEC value:0x3F0
+dirty bitmap address:0x682FCF4 value:0x3F0
+dirty bitmap address:0x682FCFC value:0x3F0
+dirty bitmap address:0x682FD04 value:0x3F0
+dirty bitmap address:0x682FD0C value:0x3F0
+dirty bitmap address:0x682FD14 value:0x3F0
+dirty bitmap address:0x682FD1C value:0x3F0
+dirty bitmap address:0x682FD24 value:0x3F0
+dirty bitmap address:0x682FD2C value:0x3F0
+dirty bitmap address:0x682FD34 value:0x3F0
+dirty bitmap address:0x682FD3C value:0x3F0
+dirty bitmap address:0x682FD44 value:0x3F0
+dirty bitmap address:0x682FD4C value:0x3F0
+dirty bitmap address:0x682FD54 value:0x3F0
+dirty bitmap address:0x682FD5C value:0x3F0
+dirty bitmap address:0x682FD64 value:0x3F0
+dirty bitmap address:0x682FD6C value:0x3F0
+dirty bitmap address:0x682FD74 value:0x3F0
+dirty bitmap address:0x682FD7C value:0x3F0
+dirty bitmap address:0x682FD84 value:0x3F0
+dirty bitmap address:0x682FD8C value:0x3F0
+dirty bitmap address:0x682FD94 value:0x3F0
+dirty bitmap address:0x682FD9C value:0x3F0
+dirty bitmap address:0x682FDA4 value:0x3F0
+dirty bitmap address:0x682FDAC value:0x3F0
+dirty bitmap address:0x682FDB4 value:0x3F0
+dirty bitmap address:0x682FDBC value:0x3F0
+dirty bitmap address:0x682FDC4 value:0x3F0
+dirty bitmap address:0x682FDCC value:0x3F0
+dirty bitmap address:0x682FDD4 value:0x3F0
+dirty bitmap address:0x682FDDC value:0x3F0
+dirty bitmap address:0x682FDE4 value:0x3F0
+dirty bitmap address:0x682FDEC value:0x3F0
+dirty bitmap address:0x682FDF4 value:0x3F0
+dirty bitmap address:0x682FDFC value:0x3F0
+dirty bitmap address:0x682FE04 value:0x3F0
+dirty bitmap address:0x682FE0C value:0x3F0
+dirty bitmap address:0x682FE14 value:0x3F0
+dirty bitmap address:0x682FE1C value:0x3F0
+dirty bitmap address:0x682FE24 value:0x3F0
+dirty bitmap address:0x682FE2C value:0x3F0
+dirty bitmap address:0x682FE34 value:0x3F0
+dirty bitmap address:0x682FE3C value:0x3F0
+dirty bitmap address:0x682FE44 value:0x3F0
+dirty bitmap address:0x682FE4C value:0x3F0
+dirty bitmap address:0x682FE54 value:0x3F0
+dirty bitmap address:0x682FE5C value:0x3F0
+dirty bitmap address:0x682FE64 value:0x3F0
+dirty bitmap address:0x682FE6C value:0x3F0
+dirty bitmap address:0x682FE74 value:0x3F0
+dirty bitmap address:0x682FE7C value:0x3F0
+dirty bitmap address:0x682FE84 value:0x3F0
+dirty bitmap address:0x682FE8C value:0x3F0
+dirty bitmap address:0x682FE94 value:0x3F0
+dirty bitmap address:0x682FE9C value:0x3F0
+dirty bitmap address:0x682FEA4 value:0x3F0
+dirty bitmap address:0x682FEAC value:0x3F0
+dirty bitmap address:0x682FEB4 value:0x3F0
+dirty bitmap address:0x682FEBC value:0x3F0
+dirty bitmap address:0x682FEC4 value:0x3F0
+dirty bitmap address:0x682FECC value:0x3F0
+dirty bitmap address:0x682FED4 value:0x3F0
+dirty bitmap address:0x682FEDC value:0x3F0
+dirty bitmap address:0x682FEE4 value:0x3F0
+dirty bitmap address:0x682FEEC value:0x3F0
+dirty bitmap address:0x682FEF4 value:0x3F0
+dirty bitmap address:0x682FEFC value:0x3F0
+dirty bitmap address:0x682FF04 value:0x3F0
+dirty bitmap address:0x682FF0C value:0x3F0
+dirty bitmap address:0x682FF14 value:0x3F0
+dirty bitmap address:0x682FF1C value:0x3F0
+dirty bitmap address:0x682FF24 value:0x3F0
+dirty bitmap address:0x682FF2C value:0x3F0
+dirty bitmap address:0x682FF34 value:0x3F0
+dirty bitmap address:0x682FF3C value:0x3F0
+dirty bitmap address:0x682FF44 value:0x3F0
+dirty bitmap address:0x682FF4C value:0x3F0
+dirty bitmap address:0x682FF54 value:0x3F0
+dirty bitmap address:0x682FF5C value:0x3F0
+dirty bitmap address:0x682FF64 value:0x3F0
+dirty bitmap address:0x682FF6C value:0x3F0
+dirty bitmap address:0x682FF74 value:0x3F0
+dirty bitmap address:0x682FF7C value:0x3F0
+dirty bitmap address:0x682FF84 value:0x3F0
+dirty bitmap address:0x682FF8C value:0x3F0
+dirty bitmap address:0x682FF94 value:0x3F0
+dirty bitmap address:0x682FF9C value:0x3F0
+dirty bitmap address:0x682FFA4 value:0x3F0
+dirty bitmap address:0x682FFAC value:0x3F0
+dirty bitmap address:0x682FFB4 value:0x3F0
+dirty bitmap address:0x682FFBC value:0x3F0
+dirty bitmap address:0x682FFC4 value:0x3F0
+dirty bitmap address:0x682FFCC value:0x3F0
+dirty bitmap address:0x682FFD4 value:0x3F0
+dirty bitmap address:0x682FFDC value:0x3F0
+dirty bitmap address:0x682FFE4 value:0x3F0
+dirty bitmap address:0x682FFEC value:0x3F0
+dirty bitmap address:0x682FFF4 value:0x3F0
+dirty bitmap address:0x682FFFC value:0x3FC
+Cleaned up init process
+GemOS shell again!
+GemOS# Shutting down...
+

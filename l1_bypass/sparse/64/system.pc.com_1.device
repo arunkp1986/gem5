@@ -1,0 +1,121 @@
+            Starting IITK gemOS ......
+Initial Segment Map: cs = 0x8 ds = 0x10 ss = 0x10
+ESP=0x1130D8 EBP=0x113148
+cr0=0xE0000011 cr3=0x70000 cr4=0x20
+Initializing memory
+base = 0x0 limit low = 0x0 high=0x0 ac_byte = 0x0 flags=0x0
+base = 0x0 limit low = 0xFFFF high=0xF ac_byte = 0x9A flags=0xA
+base = 0x0 limit low = 0xFFFF high=0xF ac_byte = 0x92 flags=0xE
+base = 0x0 limit low = 0xFFFF high=0xF ac_byte = 0x8B flags=0xA
+Initializing user segments
+Initializing APIC
+gemOS shell... 
+GemOS# Setting up init process ...
+Page table setup done, launching init ...
+dirty tracking on
+dirty tracking on
+dirty bitmap address:0x6C2EFFC value:0x8
+dirty bitmap address:0x6C2F01C value:0x8
+dirty bitmap address:0x6C2F03C value:0x8
+dirty bitmap address:0x6C2F05C value:0x8
+dirty bitmap address:0x6C2F07C value:0x8
+dirty bitmap address:0x6C2F09C value:0x8
+dirty bitmap address:0x6C2F0BC value:0x8
+dirty bitmap address:0x6C2F0DC value:0x8
+dirty bitmap address:0x6C2F0FC value:0x8
+dirty bitmap address:0x6C2F11C value:0x8
+dirty bitmap address:0x6C2F13C value:0x8
+dirty bitmap address:0x6C2F15C value:0x8
+dirty bitmap address:0x6C2F17C value:0x8
+dirty bitmap address:0x6C2F19C value:0x8
+dirty bitmap address:0x6C2F1BC value:0x8
+dirty bitmap address:0x6C2F1DC value:0x8
+dirty bitmap address:0x6C2F1FC value:0x8
+dirty bitmap address:0x6C2F21C value:0x8
+dirty bitmap address:0x6C2F23C value:0x8
+dirty bitmap address:0x6C2F25C value:0x8
+dirty bitmap address:0x6C2F27C value:0x8
+dirty bitmap address:0x6C2F29C value:0x8
+dirty bitmap address:0x6C2F2BC value:0x8
+dirty bitmap address:0x6C2F2DC value:0x8
+dirty bitmap address:0x6C2F2FC value:0x8
+dirty bitmap address:0x6C2F31C value:0x8
+dirty bitmap address:0x6C2F33C value:0x8
+dirty bitmap address:0x6C2F35C value:0x8
+dirty bitmap address:0x6C2F37C value:0x8
+dirty bitmap address:0x6C2F39C value:0x8
+dirty bitmap address:0x6C2F3BC value:0x8
+dirty bitmap address:0x6C2F3DC value:0x8
+dirty bitmap address:0x6C2F3FC value:0x8
+dirty bitmap address:0x6C2F41C value:0x8
+dirty bitmap address:0x6C2F43C value:0x8
+dirty bitmap address:0x6C2F45C value:0x8
+dirty bitmap address:0x6C2F47C value:0x8
+dirty bitmap address:0x6C2F49C value:0x8
+dirty bitmap address:0x6C2F4BC value:0x8
+dirty bitmap address:0x6C2F4DC value:0x8
+dirty bitmap address:0x6C2F4FC value:0x8
+dirty bitmap address:0x6C2F51C value:0x8
+dirty bitmap address:0x6C2F53C value:0x8
+dirty bitmap address:0x6C2F55C value:0x8
+dirty bitmap address:0x6C2F57C value:0x8
+dirty bitmap address:0x6C2F59C value:0x8
+dirty bitmap address:0x6C2F5BC value:0x8
+dirty bitmap address:0x6C2F5DC value:0x8
+dirty bitmap address:0x6C2F5FC value:0x8
+dirty bitmap address:0x6C2F61C value:0x8
+dirty bitmap address:0x6C2F63C value:0x8
+dirty bitmap address:0x6C2F65C value:0x8
+dirty bitmap address:0x6C2F67C value:0x8
+dirty bitmap address:0x6C2F69C value:0x8
+dirty bitmap address:0x6C2F6BC value:0x8
+dirty bitmap address:0x6C2F6DC value:0x8
+dirty bitmap address:0x6C2F6FC value:0x8
+dirty bitmap address:0x6C2F71C value:0x8
+dirty bitmap address:0x6C2F73C value:0x8
+dirty bitmap address:0x6C2F75C value:0x8
+dirty bitmap address:0x6C2F77C value:0x8
+dirty bitmap address:0x6C2F79C value:0x8
+dirty bitmap address:0x6C2F7BC value:0x8
+dirty bitmap address:0x6C2F7DC value:0x8
+dirty bitmap address:0x6C2F7FC value:0x8
+dirty bitmap address:0x6C2F81C value:0x8
+dirty bitmap address:0x6C2F83C value:0x8
+dirty bitmap address:0x6C2F85C value:0x8
+dirty bitmap address:0x6C2F87C value:0x8
+dirty bitmap address:0x6C2F89C value:0x8
+dirty bitmap address:0x6C2F8BC value:0x8
+dirty bitmap address:0x6C2F8DC value:0x8
+dirty bitmap address:0x6C2F8FC value:0x8
+dirty bitmap address:0x6C2F91C value:0x8
+dirty bitmap address:0x6C2F93C value:0x8
+dirty bitmap address:0x6C2F95C value:0x8
+dirty bitmap address:0x6C2F97C value:0x8
+dirty bitmap address:0x6C2F99C value:0x8
+dirty bitmap address:0x6C2F9BC value:0x8
+dirty bitmap address:0x6C2F9DC value:0x8
+dirty bitmap address:0x6C2F9FC value:0x8
+dirty bitmap address:0x6C2FA1C value:0x8
+dirty bitmap address:0x6C2FA3C value:0x8
+dirty bitmap address:0x6C2FA5C value:0x8
+dirty bitmap address:0x6C2FA7C value:0x8
+dirty bitmap address:0x6C2FA9C value:0x8
+dirty bitmap address:0x6C2FABC value:0x8
+dirty bitmap address:0x6C2FADC value:0x8
+dirty bitmap address:0x6C2FAFC value:0x8
+dirty bitmap address:0x6C2FB1C value:0x8
+dirty bitmap address:0x6C2FB3C value:0x8
+dirty bitmap address:0x6C2FB5C value:0x8
+dirty bitmap address:0x6C2FB7C value:0x8
+dirty bitmap address:0x6C2FB9C value:0x8
+dirty bitmap address:0x6C2FBBC value:0x8
+dirty bitmap address:0x6C2FBDC value:0x8
+dirty bitmap address:0x6C2FBFC value:0x8
+dirty bitmap address:0x6C2FC1C value:0x8
+dirty bitmap address:0x6C2FC3C value:0x8
+dirty bitmap address:0x6C2FC5C value:0x8
+dirty bitmap address:0x6C2FFFC value:0x6
+Cleaned up init process
+GemOS shell again!
+GemOS# Shutting down...
+

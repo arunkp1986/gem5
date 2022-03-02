@@ -396,6 +396,8 @@ class Packet : public Printable
 
     uint8_t tracker_pkt;
 
+    uint32_t dirtybit_pos;
+
     // hardware transactional memory
 
     /**
@@ -785,7 +787,9 @@ class Packet : public Printable
     Addr getAddr() const { assert(flags.isSet(VALID_ADDR)); return addr; }
 
     void setTracker(uint8_t value) { tracker_pkt = value; }
+    void setDirtybitPos(uint32_t value) { dirtybit_pos = value; }
     uint8_t getTracker() const { return tracker_pkt; }
+    uint32_t getDirtybitPos() const { return dirtybit_pos; }
     /**
      * Update the address of this packet mid-transaction. This is used
      * by the address mapper to change an already set address to a new
@@ -858,7 +862,7 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd)
         :  cmd(_cmd), id((PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false), size(0),
-           _qosValue(0),tracker_pkt(0),
+           _qosValue(0),tracker_pkt(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(0), snoopDelay(0),
@@ -899,7 +903,7 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd, int _blkSize, PacketId _id = 0)
         :  cmd(_cmd), id(_id ? _id : (PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false),
-           _qosValue(0),tracker_pkt(0),
+           _qosValue(0),tracker_pkt(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(0),
@@ -929,6 +933,7 @@ class Packet : public Printable
            bytesValid(pkt->bytesValid),
            _qosValue(pkt->qosValue()),
            tracker_pkt(pkt->tracker_pkt),
+           dirtybit_pos(pkt->dirtybit_pos),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),
            headerDelay(pkt->headerDelay),
@@ -1079,6 +1084,13 @@ class Packet : public Printable
         this->data = new uint8_t[getSize()];
         flags.set(STATIC_DATA);
     }
+
+    void
+    setTcmd(MemCmd _cmd)
+    {
+        this->cmd = _cmd;
+    }
+
 
     void
     setSize(unsigned size)
@@ -1278,6 +1290,22 @@ class Packet : public Printable
             std::memcpy(getPtr<uint8_t>(), p, getSize());
         }
     }
+
+    void
+    getData(uint8_t *p)
+    {
+        // we should never be copying data onto itself, which means we
+        // must idenfity packets with static data, as they carry the
+        // same pointer from source to destination and back
+        //assert(p != getPtr<uint8_t>() || flags.isSet(STATIC_DATA));
+
+        if (p != getPtr<uint8_t>()) {
+            // for packet with allocated dynamic data, we copy data from
+            // one to the other, e.g. a forwarded response to a response
+            std::memcpy(p,getPtr<uint8_t>(),getSize());
+        }
+    }
+
 
     /**
      * Copy data into the packet from the provided block pointer,

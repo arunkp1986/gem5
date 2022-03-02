@@ -496,6 +496,26 @@ class Request
         atomicOpFunctor.reset(other.atomicOpFunctor ?
                                 other.atomicOpFunctor->clone() : nullptr);
     }
+   /*
+    Request(const RequestPtr other)
+        : _paddr(other->_paddr), _size(other->_size),
+          _byteEnable(other->_byteEnable),
+          _requestorId(other->_requestorId),
+          _flags(other->_flags),
+          _cacheCoherenceFlags(other->_cacheCoherenceFlags),
+          privateFlags(other->privateFlags),
+          _time(other->_time),
+          _taskId(other->_taskId), _vaddr(other->_vaddr),
+          _extraData(other->_extraData), _contextId(other->_contextId),
+          _pc(other->_pc), _reqInstSeqNum(other->_reqInstSeqNum),
+          _localAccessor(other->_localAccessor),
+          translateDelta(other->translateDelta),
+          accessDelta(other->accessDelta), depth(other->depth)
+    {
+        atomicOpFunctor.reset(other->atomicOpFunctor ?
+                                (other->atomicOpFunctor)->clone() : nullptr);
+    }*/
+
 
     ~Request() {}
 
@@ -788,6 +808,14 @@ class Request
     {
         return _requestorId;
     }
+
+    void
+    setrequestorId(RequestorID id)
+    {
+        _requestorId = id;
+    }
+
+
 
     uint32_t
     taskId() const

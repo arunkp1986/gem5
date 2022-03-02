@@ -41,6 +41,7 @@
 #ifndef __CPU_SIMPLE_TIMING_HH__
 #define __CPU_SIMPLE_TIMING_HH__
 
+#include <atomic>
 #include <list>
 
 #include "arch/generic/mmu.hh"
@@ -49,9 +50,21 @@
 #include "cpu/translation.hh"
 #include "params/TimingSimpleCPU.hh"
 
+/*
+ * LOOKUP_SIZE size of dirty bitmap lookup table.
+ * HIGH_WATERMARK number of bits set to initiate dirty bitmap write.
+ * LOW_WATERMARK minimum number of bits set in
+ * the evicted bitmap lookup table entries.
+ * the logic for LOW_WATERMARK is that, prefer
+ * to keep entries with more dirty bits
+ * set so evict entries with dirty bits <= LOW_WATERMARK
+ *
+ * */
+#define LOOKUP_SIZE 16
+#define HIGH_WATERMARK 4
+#define LOW_WATERMARK 2
 namespace gem5
 {
-
 
 class TimingSimpleCPU : public BaseSimpleCPU
 {
@@ -237,7 +250,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
         virtual void recvFunctionalSnoop(PacketPtr pkt);
 
         virtual bool recvTimingResp(PacketPtr pkt);
-
+        void create_comparator_write(PacketPtr pkt, uint16_t isdone);
         virtual void recvReqRetry();
 
         virtual bool isSnooping() const {
@@ -263,6 +276,10 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     PacketPtr ifetch_pkt;
     PacketPtr dcache_pkt;
+    PacketPtr dcache_tracker_pkt;
+    uint16_t num_dirty_packets;
+    uint16_t dirty_tracking_done;
+    std::atomic<std::uint8_t> bitset_pending;
 
     Cycles previousCycle;
 
@@ -303,8 +320,14 @@ class TimingSimpleCPU : public BaseSimpleCPU
         unsigned size;
      };
 
-    std::list<PacketPtr> comparator_list;
+    std::list<PacketPtr> comparator_list;// Added By Arun KP
+    std::unordered_map<Addr,std::pair<std::atomic<std::uint8_t>,uint32_t>>\
+            dirty_lookup; //Added by Arun KP
+    std::unordered_map<Addr,PacketPtr> dirty_packet; //Added by Arun KP
+    std::unordered_map<Addr,uint8_t> dirty_count; //Added by Arun KP
     void comparator();
+    void comparator_flush();
+    void comparator_selective_flush();
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
                          AtomicOpFunctorPtr amo_op) override;
 

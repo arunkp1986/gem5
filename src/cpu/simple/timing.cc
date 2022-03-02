@@ -56,6 +56,7 @@
 #include "debug/Stackp.hh" //Added by KP Arun
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
+#include "mem/request.hh"
 #include "params/TimingSimpleCPU.hh"
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
@@ -79,8 +80,9 @@ TimingSimpleCPU::TimingCPUPort::TickEvent::schedule(PacketPtr _pkt, Tick t)
 
 TimingSimpleCPU::TimingSimpleCPU(const TimingSimpleCPUParams &p)
     : BaseSimpleCPU(p), fetchTranslation(this), icachePort(this),
-      dcachePort(this), ifetch_pkt(NULL), dcache_pkt(NULL), previousCycle(0),
-      fetchEvent([this]{ fetch(); }, name())
+      dcachePort(this), ifetch_pkt(NULL), dcache_pkt(NULL),
+      num_dirty_packets(0),dirty_tracking_done(0),bitset_pending(0),
+      previousCycle(0),fetchEvent([this]{ fetch(); }, name())
 {
     _status = Idle;
 }
@@ -305,27 +307,36 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     SimpleThread* thread = t_info.thread;
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
+    static uint8_t flag = 0;
 
     ThreadContext *tc = thread->getTC();
-    Addr stack_start = 0;
-    Addr stack_end = 0;
-    stack_start = (Addr)tc->readMiscRegNoEffect(
+    Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_TRACK_START);
-    stack_end = (Addr)tc->readMiscRegNoEffect(
+    Addr stack_end = (Addr)tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_TRACK_END);
+    uint16_t tracking_log_gran = tc->readMiscRegNoEffect(\
+                    gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
+    Addr tracking_address = tc->readMiscRegNoEffect(\
+                    gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+    if (bitset_pending){
+        std::cout<<"queue waiting loop hit sendData"<<std::endl;
+    }
+    while (bitset_pending == 1);
 
-    if ((stack_start <= req->getVaddr()) &&
-                    (req->getVaddr() <= stack_end) &&
-                    pkt->isWrite()){
-        //&& pkt->isWrite()
-       //here check whether the vaddr in req is of interest, if yes
-       //copy the packet
-       //and put into list
-       //std::cout<<"send Data stack_start:"<<std::hex<<stack_start<<std::endl;
-       DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
-       PacketPtr tracker_pkt = new Packet(pkt,0,1);
-       comparator_list.push_front(tracker_pkt);
-     }
+    /*here we are checking the tracking is still valid
+     * and vaddr in req is of interest*/
+    if ((tracking_log_gran > 1) &&\
+                ((stack_start <= req->getVaddr()) &&\
+        (req->getVaddr() <= stack_end)) && pkt->isWrite()){
+        //std::cout<<"Dirty Tracking On"<<std::endl;
+        DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
+        RequestPtr tracker_req(new Request(*pkt->req));
+        tracker_req->setrequestorId(gem5::Request::dirtyRequestorId);
+        PacketPtr tracker_pkt = new Packet(pkt,0,1);
+        tracker_pkt->req = tracker_req;
+        //std::cout<<"address: "<<std::hex<<req->getVaddr()<<std::endl;
+        comparator_list.push_front(tracker_pkt);
+    }
 
     // hardware transactional memory
     // If the core is in transactional mode or if the request is HtmCMD
@@ -343,6 +354,22 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         pkt->makeResponse();
         completeDataAccess(pkt);
     } else if (read) {
+        if (tracking_log_gran == 1 &&\
+                        ((tracking_address <= req->getVaddr()) &&\
+                        (req->getVaddr() < tracking_address+64)) && flag == 0){
+            //dirty_tracking_done = 1;
+            std::cout<<"tracking address: "<<\
+                    std::hex<<tracking_address<<std::endl;
+            std::cout<<"num_dirty_packets: "<<\
+                    num_dirty_packets<<std::endl;
+            std::cout<<"dirty_tracking_done: "<<\
+                    dirty_tracking_done<<std::endl;
+            //process any pending requests in queue
+            comparator_flush();
+            dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
+            flag += 1;
+        }
+
         handleReadPacket(pkt);
     } else {
         bool do_access = true;  // flag to suppress cache access
@@ -363,9 +390,6 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
             completeDataAccess(pkt);
         }
     }
-   //if (req->getVaddr() == (Addr)0x7FFFFFFA4){
-    //   DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
-  // }
    if (!comparator_list.empty()){
        comparator();
    }
@@ -554,8 +578,86 @@ TimingSimpleCPU::handleWritePacket()
     return dcache_pkt == NULL;
 }
 /*Added by KP Arun.*/
-std::unordered_map<uint32_t,uint32_t> dirty_value_map;
-std::unordered_map<uint32_t,PacketPtr> dirty_tracker_pkt;
+
+void
+TimingSimpleCPU::comparator_flush(){
+    Addr dirty_address = 0;
+    uint32_t value = 0;
+    for (auto it = dirty_lookup.begin(); it != dirty_lookup.end(); ++it){
+        dirty_address = (Addr)it->first;
+        assert(dirty_packet.find(dirty_address) != dirty_packet.end());
+        PacketPtr tracker_pkt = dirty_packet[dirty_address];
+        RequestPtr tracker_req = tracker_pkt->req;
+        tracker_req->setFlags(Request::PHYSICAL);
+        tracker_req->setPaddr(dirty_address);
+        tracker_pkt->setAddr(dirty_address);
+        tracker_pkt->setTcmd(MemCmd::ReadReq);
+        tracker_pkt->setTSize(4);
+        tracker_pkt->setTracker(1);
+        value = (dirty_lookup[dirty_address]).second;
+        if (value){
+            tracker_pkt->setDirtybitPos(value);
+            if (!dcachePort.sendTimingReq(tracker_pkt)) {
+                DPRINTF(Stackp, "sending failed\n");
+                std::cout<<"sending failed"<<std::endl;
+                _trackerstatus = DcacheTrackerRetry;
+                dcache_tracker_pkt = tracker_pkt;
+            }
+            else {
+                DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+                //std::cout<<"comparator_flush read sent"<<std::endl;
+                _trackerstatus = DcacheWaitTrackerResponse;
+                dcache_tracker_pkt = NULL;
+                num_dirty_packets += 1;
+            }
+        }
+    }
+}
+
+void
+TimingSimpleCPU::comparator_selective_flush(){
+    Addr dirty_address = 0;
+    uint32_t value = 0;
+    std::cout<<"lookup table eviction: "<<std::endl;
+    for (auto it = dirty_lookup.begin(); it != dirty_lookup.end(); ++it){
+        dirty_address = (Addr)it->first;
+        /*
+         *the logic for LOW_WATERMARK is that,
+         prefer to keep entries with more dirty bits
+         *set so evict entries with dirty bits <= LOW_WATERMARK.
+        */
+        if ( (dirty_count[dirty_address]) &&\
+                (dirty_count[dirty_address] <= LOW_WATERMARK)){
+            assert(dirty_packet.find(dirty_address) != dirty_packet.end());
+            PacketPtr tracker_pkt = dirty_packet[dirty_address];
+            RequestPtr tracker_req = tracker_pkt->req;
+            tracker_req->setFlags(Request::PHYSICAL);
+            tracker_req->setPaddr(dirty_address);
+            tracker_pkt->setAddr(dirty_address);
+            tracker_pkt->setTcmd(MemCmd::ReadReq);
+            tracker_pkt->setTSize(4);
+            tracker_pkt->setTracker(1);
+            value = (dirty_lookup[dirty_address]).second;
+            if (value){
+                tracker_pkt->setDirtybitPos(value);
+                if (!dcachePort.sendTimingReq(tracker_pkt)) {
+                    DPRINTF(Stackp, "sending failed\n");
+                    _trackerstatus = DcacheTrackerRetry;
+                    dcache_tracker_pkt = tracker_pkt;
+                }
+                else {
+                    DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+                    _trackerstatus = DcacheWaitTrackerResponse;
+                    dcache_tracker_pkt = NULL;
+                    num_dirty_packets += 1;
+                }
+            }
+        }
+    }
+}
+
+
+//limit the number of entries to lookup to 16, and water mark to 8,16,32
 void
 TimingSimpleCPU::comparator(){
     //struct item temp = comparator_list.back();
@@ -569,7 +671,11 @@ TimingSimpleCPU::comparator(){
     Addr stack_start = 0;
     //Addr stack_end = 0;
     uint16_t tracking_log_gran = 0;
-    PacketPtr dirty_pkt = NULL;
+    uint8_t proceed = 0;
+    uint64_t stack_byte_offset = 0;
+    uint32_t dirty_bit_pos = 0;
+    uint32_t dirty_bitmap_pos = 0;
+    //PacketPtr dirty_pkt = NULL;
     stack_start = (Addr)tc->readMiscRegNoEffect(\
                   gem5::X86ISA::MISCREG_TRACK_START);
     //stack_end = (Addr)tc->readMiscRegNoEffect(
@@ -578,116 +684,87 @@ TimingSimpleCPU::comparator(){
                   gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
     tracking_log_gran = tc->readMiscRegNoEffect(\
                   gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
-    if (tracking_address && tracking_log_gran){
+    /* here tracking_log_gran == 0 means end dirty tracking
+     *  has reached
+     * and tracking_log_gran == 1 means hardware has sent all
+     * dirty stores to dcache
+     * */
+    //std::cout<<"comparator tracking gran: "<<tracking_log_gran<<std::endl;
+    if (tracking_address && tracking_log_gran > 1){
+        //This is the eviction policy of dirty address
+        //lookup table.
+        if (comparator_list.size() == (LOOKUP_SIZE-1)){
+            comparator_selective_flush();
+        }
         PacketPtr tracker_pkt = comparator_list.back();
         RequestPtr tracker_req = tracker_pkt->req;
         comparator_list.pop_back();
         virtual_address = tracker_req->getVaddr();
-        uint64_t stack_byte_offset = virtual_address - stack_start;
-        uint32_t dirty_bit_pos = \
-                (stack_byte_offset >> tracking_log_gran);
-        uint32_t dirty_bitmap_pos = dirty_bit_pos>>5;
-        /*std::cout<<"dirty_value:"
-         * <<std::hex<<dirty_value_map[dirty_bitmap_pos]
-         * <<std::endl;*/
+        stack_byte_offset = virtual_address - stack_start;
+        dirty_bit_pos = (stack_byte_offset >> tracking_log_gran);
+        dirty_bitmap_pos = dirty_bit_pos>>5;
+        dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
+        if (dirty_packet.find(dirty_address) == dirty_packet.end()){
+            dirty_packet[dirty_address] = new Packet(tracker_pkt,0,1);
+        }
 
-        if (dirty_value_map.find(dirty_bitmap_pos) == dirty_value_map.end()){
-            dirty_value_map[dirty_bitmap_pos] = 0;
-            dirty_value_map[dirty_bitmap_pos] |=\
-                        1<<(31-(dirty_bit_pos%32));
+        /*create an entry in lookup table
+         *if entry present, check write in progress
+         *if not, check already entry with same bit pos
+         *if not, add the entry at free pos
+         *and if queue full for address, issue read
+         *if not present and queue full, add to pending queue
+         *if write in progress, add to pending queue
+         * */
+        if ((dirty_lookup.find(dirty_address) != dirty_lookup.end())&&\
+              ((dirty_lookup[dirty_address]).first)){
+            bitset_pending = 1;
+        }
+        if (bitset_pending)
+        {std::cout<<"looping on queue waiting in comparator"<<std::endl;}
+        while (bitset_pending);
+        if (dirty_lookup.find(dirty_address) == dirty_lookup.end()){
+            dirty_count[dirty_address] = 0;
+            (dirty_lookup[dirty_address]).first = 0;
+            (dirty_lookup[dirty_address]).second =\
+                        (1<<(31-(dirty_bit_pos%32)));
+            dirty_count[dirty_address] += 1;
         }
         else{
-            dirty_value_map[dirty_bitmap_pos] |=\
-                        1<<(31-(dirty_bit_pos%32));
+            //set bit only if its not set previously
+            if (!((dirty_lookup[dirty_address]).second &\
+                   (1<<(31-(dirty_bit_pos%32))))){
+                (dirty_lookup[dirty_address]).second |=\
+                         (1<<(31-(dirty_bit_pos%32)));
+                dirty_count[dirty_address] += 1;
+            }
+            if (dirty_count[dirty_address] == HIGH_WATERMARK)
+                proceed = 1;
         }
-        uint8_t bitmap_value[4];
-        /*std::cout<<"tracking_address:"
-        <<std::hex<<tracking_address<<std::endl;
-        //std::cout<<"virtual_address:"
-        //<<std::hex<<virtual_address<<std::endl;
-        //std::cout<<"stack_start:"
-        //<<std::hex<<stack_start<<std::endl;
-        //std::cout<<"stack_byte_offset:"
-        //<<std::hex<<stack_byte_offset<<std::endl;
-        //std::cout<<"dirty_bit_pos:"
-        //<<std::hex<<dirty_bit_pos<<std::endl;
-        //std::cout<<"dirty_bitmap_pos:"
-        //<<std::hex<<dirty_bitmap_pos<<std::endl;
-        //std::cout<<"dirty_value:"
-        //<<std::hex<<dirty_value_map[dirty_bitmap_pos]
-        //<<std::endl;
-        */
-        if (dirty_tracker_pkt.find(dirty_bitmap_pos) ==\
-                            dirty_tracker_pkt.end()){
-            dirty_address = (Addr)(tracking_address+\
-                             (4*dirty_bitmap_pos));
-            memcpy(bitmap_value,&(dirty_value_map[dirty_bitmap_pos]),4);
+        if (proceed){
             tracker_req->setFlags(Request::PHYSICAL);
             tracker_req->setPaddr(dirty_address);
             tracker_pkt->setAddr(dirty_address);
+            tracker_pkt->setTcmd(MemCmd::ReadReq);
             tracker_pkt->setTSize(4);
-            tracker_pkt->setData(bitmap_value);
             tracker_pkt->setTracker(1);
-            dirty_tracker_pkt[dirty_bitmap_pos] = tracker_pkt ;
-        }
-        else{
-            dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
-            memcpy(bitmap_value,&(dirty_value_map[dirty_bitmap_pos]),4);
-            dirty_tracker_pkt[dirty_bitmap_pos]->setData(bitmap_value);
+            uint32_t value = (dirty_lookup[dirty_address]).second;
+            tracker_pkt->setDirtybitPos(value);
+            if (!dcachePort.sendTimingReq(tracker_pkt)) {
+                DPRINTF(Stackp, "sending failed\n");
+                _trackerstatus = DcacheTrackerRetry;
+                dcache_tracker_pkt = tracker_pkt;
+            }
+            else {
+                DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+                _trackerstatus = DcacheWaitTrackerResponse;
+                dcache_tracker_pkt = NULL;
+                num_dirty_packets += 1;
+            }
         }
     }
-
-                /*memcpy(bitmap_value,&(it->second),4);
-                memcpy(bitmap_value,&(dirty_value_map[dirty_bitmap_pos]),4);
-                dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
-                std::cout<<"tracking_address:"
-                <<std::hex<<tracking_address<<std::endl;
-                std::cout<<"virtual_address:"
-                <<std::hex<<virtual_address<<std::endl;
-                std::cout<<"stack_start:"
-                <<std::hex<<stack_start
-                <<std::endl;
-                std::cout<<"stack_byte_offset:"
-                <<std::hex<<stack_byte_offset
-                <<std::endl;
-                std::cout<<"dirty_bit_pos:"
-                <<std::hex<<dirty_bit_pos<<std::endl;
-                std::cout<<"dirty_bitmap_pos:"
-                <<std::hex<<dirty_bitmap_pos<<std::endl;
-                std::cout<<"dirty_address:"
-                <<std::hex<<dirty_address<<std::endl;
-                std::cout<<"dirty_value:"
-                <<std::hex<<dirty_value_map[dirty_bitmap_pos]<<std::endl;
-                tracker_req->setFlags(Request::PHYSICAL);
-                tracker_req->setPaddr(dirty_address);
-                tracker_pkt->setAddr(dirty_address);
-                tracker_pkt->setTSize(4);
-                tracker_pkt->setData(bitmap_value);
-                std::cout<<"size:"<<tracker_pkt->getSize()<<std::endl;
-                tracker_pkt->setTracker(1);*/
-        else{
-        std::unordered_map<uint32_t,PacketPtr>:: iterator it;
-        //it = dirty_tracker_pkt.begin();
-        for (it = dirty_tracker_pkt.begin();\
-                  it != dirty_tracker_pkt.end();\
-                  it++){
-                if (it->second != 0){
-                dirty_pkt = new Packet(it->second,0,1);
-                if (!dcachePort.sendTimingReq(dirty_pkt)) {
-                    DPRINTF(Stackp, "sending failed\n");
-                    _status = DcacheRetry;
-                } else {
-                    DPRINTF(Stackp, "setting DcacheWaitResponse\n");
-                    _status = DcacheWaitResponse;
-               }
-                it->second = 0;
-              }
-           }
-        }
     return;
 }
-
-
 
 Fault
 TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
@@ -696,17 +773,6 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
 {
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
-    //ThreadContext *tc = thread->getTC();
-    //if (TrackerObject::tracking_address == 0){
-        //DPRINTF(Stackp, "inside setting tracking address\n");
-      //  TrackerObject::tracking_address = tc->readMiscRegNoEffect(
-      //  gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
-   // }
-    //if (tc->readMiscRegNoEffect(gem5::X86ISA::MISCREG_TRACK_START) != 0){
-      //  DPRINTF(Stackp, "msr: %x value:%x\n",
-      //  gem5::X86ISA::MISCREG_TRACK_START,
-      //  tc->readMiscRegNoEffect(gem5::X86ISA::MISCREG_TRACK_START));
-   // }
     uint8_t *newData = new uint8_t[size];
     const Addr pc = thread->instAddr();
     unsigned block_size = cacheLineSize();
@@ -758,13 +824,6 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
             new DataTranslation<TimingSimpleCPU *>(this, state);
         thread->mmu->translateTiming(req, thread->getTC(), translation, mode);
     }
-    /*if (addr == (Addr)0x7FFFFFFA4){
-        DPRINTF(Stackp, "from timing: Address:%x, size:%u\n", addr, size);
-        //struct item temp = {addr,size};
-        //comparator_list.push_front(temp);
-        //comparator(addr,size);
-    }*/
-
     // Translation faults will be returned via finishTranslation()
     return NoFault;
 }
@@ -1012,6 +1071,9 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
     // received a response from the icache: execute the received
     // instruction
     assert(!pkt || !pkt->isError());
+    if (!(_status == IcacheWaitResponse)){
+        std::cout<<"bug"<<std::endl;
+    }
     assert(_status == IcacheWaitResponse);
 
     _status = BaseSimpleCPU::Running;
@@ -1146,9 +1208,13 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     // received a response from the dcache: complete the load or store
     // instruction
     assert(!pkt->isError());
-    if (_status == 5){
-        DPRINTF(Stackp, "Address:%x\n",pkt->getAddr());
-    }
+/*
+    if (!(_status == DcacheWaitResponse ||
+    _status == DTBWaitResponse ||
+    pkt->req->getFlags().isSet(Request::NO_ACCESS))){
+        std::cout<<"bug"<<std::endl;
+    }*/
+
     assert(_status == DcacheWaitResponse || _status == DTBWaitResponse ||
            pkt->req->getFlags().isSet(Request::NO_ACCESS));
 
@@ -1313,15 +1379,70 @@ TimingSimpleCPU::DcachePort::recvFunctionalSnoop(PacketPtr pkt)
     }
 }
 
+//Added by KP Arun
+void
+TimingSimpleCPU::DcachePort::create_comparator_write(
+                PacketPtr tracker_pkt, uint16_t isdone){
+    uint8_t bitmap_value[4];
+    uint32_t bitmap_pos = tracker_pkt->getDirtybitPos();
+    //std::cout<<"comparator write bitmap pos: "
+    //<<std::hex<<bitmap_pos<<std::endl;
+    tracker_pkt->getData(bitmap_value);
+    //std::cout<<"bitmap: "<<\
+    //std::hex<<static_cast<unsigned>(bitmap_value[0])<<\
+    //std::endl;
+    uint32_t temp = 0;
+    memcpy(&temp, bitmap_value, 4);
+    temp |= bitmap_pos;
+    memcpy(bitmap_value, &temp, 4);
+    //std::cout<<"bitmap: "<<\
+    //std::hex<<static_cast<unsigned>(bitmap_value[0])<<\
+    //std::endl;
+    tracker_pkt->setData(bitmap_value);
+    Addr dirty_address = tracker_pkt->getAddr() ;
+    (cpu->dirty_lookup[dirty_address]).first = 1;
+    //std::cout<<"processing num packets: "<<\
+    //static_cast<unsigned>(cpu->dirty_count[dirty_address])<<\
+    //std::endl;
+    tracker_pkt->setTcmd(MemCmd::WriteReq);
+    tracker_pkt->setTracker(1);
+    if (!sendTimingReq(tracker_pkt)) {
+        DPRINTF(Stackp, "sending failed\n");
+        cpu->_trackerstatus = DcacheTrackerRetry;
+        cpu->dcache_tracker_pkt = tracker_pkt;
+        }
+    else {
+        DPRINTF(Stackp, "setting DcacheWaitResponse\n");
+        cpu->_trackerstatus = DcacheWaitTrackerResponse;
+        //std::cout<<"WReq Address: "<<tracker_pkt->getAddr()<<std::endl;
+        cpu->dcache_tracker_pkt = NULL;
+        cpu->dirty_lookup.erase(dirty_address);
+        cpu->dirty_packet.erase(dirty_address);
+        cpu->bitset_pending = 0;
+       }
+      return;
+}
+
+
 bool
 TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(SimpleCPU, "Received load/store response %#x\n", pkt->getAddr());
     //Added by KP Arun
     if (pkt->getTracker()){
-        DPRINTF(Stackp, "got tracker packet\n");
+        if (pkt->isRead()){
+            PacketPtr tracker_write_pkt = new Packet(pkt,0,1);
+            create_comparator_write(tracker_write_pkt,0);
+        }
+        if (pkt->isWrite()){
+             cpu->dirty_tracking_done += 1;
+             //std::cout<<"WResp Address: "<<pkt->getAddr()<<std::endl;
+        }
+        //std::cout<<"got tracker packet"<<std::endl;
+        delete pkt;
         return true;
     }
+
     // The timing CPU is not really ticked, instead it relies on the
     // memory system (fetch and load/store) to set the pace.
     if (!tickEvent.scheduled()) {
@@ -1341,8 +1462,10 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 void
 TimingSimpleCPU::DcachePort::DTickEvent::process()
 {
-    if (pkt->getTracker())
+    if (pkt->getTracker()){
+        std::cout<<"inside dcacheport process"<<std::endl;
         return;
+    }
     cpu->completeDataAccess(pkt);
 }
 
@@ -1351,10 +1474,13 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
 {
     // we shouldn't get a retry unless we have a packet that we're
     // waiting to transmit
-    assert(cpu->dcache_pkt != NULL);
-    assert(cpu->_status == DcacheRetry);
-    PacketPtr tmp = cpu->dcache_pkt;
-    if (tmp->senderState) {
+    assert(cpu->dcache_pkt != NULL || cpu->dcache_tracker_pkt != NULL);
+    assert(cpu->_status == DcacheRetry ||
+                   cpu->_trackerstatus == DcacheTrackerRetry);
+    PacketPtr tmp;
+    if (cpu->_status == DcacheRetry){
+        tmp = cpu->dcache_pkt;
+        if (tmp->senderState) {
         // This is a packet from a split access.
         SplitFragmentSenderState * send_state =
             dynamic_cast<SplitFragmentSenderState *>(tmp->senderState);
@@ -1388,6 +1514,45 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
         // memory system takes ownership of packet
         cpu->dcache_pkt = NULL;
     }
+    }
+    if (cpu->_trackerstatus == DcacheTrackerRetry){
+        tmp = cpu->dcache_tracker_pkt;
+        if (tmp->senderState) {
+        // This is a packet from a split access.
+        SplitFragmentSenderState * send_state =
+            dynamic_cast<SplitFragmentSenderState *>(tmp->senderState);
+        assert(send_state);
+        PacketPtr big_pkt = send_state->bigPkt;
+
+        SplitMainSenderState * main_send_state =
+            dynamic_cast<SplitMainSenderState *>(big_pkt->senderState);
+        assert(main_send_state);
+
+        if (sendTimingReq(tmp)) {
+            // If we were able to send without retrying, record that fact
+            // and try sending the other fragment.
+            send_state->clearFromParent();
+            int other_index = main_send_state->getPendingFragment();
+            if (other_index > 0) {
+                tmp = main_send_state->fragments[other_index];
+                cpu->dcache_tracker_pkt = tmp;
+                if ((big_pkt->isRead() && cpu->handleReadPacket(tmp)) ||
+                        (big_pkt->isWrite() && cpu->handleWritePacket())) {
+                    main_send_state->fragments[other_index] = NULL;
+                }
+            } else {
+                cpu->_trackerstatus = DcacheWaitTrackerResponse;
+                // memory system takes ownership of packet
+                cpu->dcache_tracker_pkt = NULL;
+            }
+        }
+    } else if (sendTimingReq(tmp)) {
+        cpu->_trackerstatus = DcacheWaitTrackerResponse;
+        // memory system takes ownership of packet
+        cpu->dcache_tracker_pkt = NULL;
+    }
+    }
+
 }
 
 TimingSimpleCPU::IprEvent::IprEvent(Packet *_pkt, TimingSimpleCPU *_cpu,
@@ -1496,5 +1661,6 @@ TimingSimpleCPU::htmSendAbortSignal(HtmFailureFaultCause cause)
 
     sendData(req, data, nullptr, true);
 }
+
 
 } // namespace gem5

@@ -364,7 +364,11 @@ SnoopFilter::updateResponse(const Packet* cpkt, const ResponsePort&
 
     DPRINTF(SnoopFilter, "%s:   old SF value %x.%x\n",
             __func__,  sf_item.requested, sf_item.holder);
-
+    //Added By KP Arun
+    if (((sf_item.requested & response_mask).none()) && cpkt->getTracker()){
+        //std::cout<<"tracker packet"<<std::endl;
+        return;
+    }
     // Make sure we have seen the actual request, too
     panic_if((sf_item.requested & response_mask).none(),
              "SF value %x.%x missing request bit\n",

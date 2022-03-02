@@ -340,6 +340,10 @@ CoherentXBar::recvTimingReq(PacketPtr pkt, PortID cpu_side_port_id)
 
             // remember where to route the normal response to
             if (expect_response || expect_snoop_resp) {
+                /*if (!(routeTo.find(pkt->req) == routeTo.end())){
+                   std::cout<<"bug here"<<std::endl;
+                }*/
+
                 assert(routeTo.find(pkt->req) == routeTo.end());
                 routeTo[pkt->req] = cpu_side_port_id;
 

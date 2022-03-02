@@ -490,8 +490,12 @@ Cache::createMissPacket(PacketPtr cpu_pkt, CacheBlk *blk,
         // that missed completely just go through as is
         return nullptr;
     }
-    if (!cpu_pkt->needsResponse())
-        std::cout<<"tracker value:"<<cpu_pkt->getTracker()<<std::endl;
+    /*
+    if (!cpu_pkt->needsResponse()){
+        std::cout<<"tracker value:"<<\
+        (unsigned int)cpu_pkt->getTracker()<<std::endl;
+        std::cout<<"createMiss Address: "<<cpu_pkt->getAddr()<<std::endl;
+    }*/
     assert(cpu_pkt->needsResponse());
 
     MemCmd cmd;
@@ -1363,6 +1367,9 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
 
     // use request from 1st target
     PacketPtr tgt_pkt = mshr->getTarget()->pkt;
+    if (!tgt_pkt->needsResponse()){
+        std::cout<<this->name()<<std::endl;
+    }
 
     if (tgt_pkt->cmd == MemCmd::HardPFReq && forwardSnoops) {
         DPRINTF(Cache, "%s: MSHR %s\n", __func__, tgt_pkt->print());

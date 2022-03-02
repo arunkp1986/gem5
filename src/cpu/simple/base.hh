@@ -116,11 +116,14 @@ class BaseSimpleCPU : public BaseCPU
         IcacheWaitSwitch,
         DTBWaitResponse,
         DcacheRetry,
+        DcacheTrackerRetry,
         DcacheWaitResponse,
+        DcacheWaitTrackerResponse,
         DcacheWaitSwitch,
     };
 
     Status _status;
+    Status _trackerstatus;
 
     /**
      * Handler used when encountering a fault; its purpose is to
