@@ -296,7 +296,7 @@ if '--ruby' in sys.argv:
     Ruby.define_options(parser)
 
 args = parser.parse_args()
-
+#print(args)
 # system under test can be any CPU
 (TestCPUClass, test_mem_mode, FutureClass) = Simulation.setCPUClass(args)
 
@@ -318,7 +318,7 @@ else:
                         mem=args.mem_size, os_type=args.os_type)]
     else:
         bm = [SysConfig(disks=args.disk_image, rootdev=args.root_device,
-                        mem=args.mem_size, os_type=args.os_type)]
+                mem=args.mem_size, nvm=args.nvm_size, os_type=args.os_type)]
 
 np = args.num_cpus
 

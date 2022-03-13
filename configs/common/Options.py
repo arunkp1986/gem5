@@ -120,19 +120,26 @@ def addNoISAOptions(parser):
     parser.add_argument("--mem-type", default="DDR3_1600_8x8",
                         choices=ObjectList.mem_list.get_names(),
                         help="type of memory to use")
+    parser.add_argument("--nvm-type", default="NVM_2400_1x64",
+                  choices=ObjectList.mem_list.get_names(),
+                  help = "type of memory to use")
     parser.add_argument("--mem-channels", type=int, default=1,
                         help="number of memory channels")
-    parser.add_argument("--mem-ranks", type=int, default=None,
+    parser.add_argument("--mem-ranks", type=int, default=2,
                         help="number of memory ranks per channel")
-    parser.add_argument(
-        "--mem-size", action="store", type=str, default="512MB",
+    parser.add_argument("--nvm-ranks", type=int, default=1,
+                  help = "Number of ranks to iterate across")
+    parser.add_argument("--mem-size", action="store", type=str, default="3GB",
+        help="Specify the physical memory size (single memory)")
+    parser.add_argument("--nvm-size", action="store", type=str, default="2GB",
         help="Specify the physical memory size (single memory)")
     parser.add_argument("--enable-dram-powerdown", action="store_true",
                         help="Enable low-power states in DRAMInterface")
     parser.add_argument("--mem-channels-intlv", type=int, default=0,
                         help="Memory channels interleave")
-
     parser.add_argument("--memchecker", action="store_true")
+    parser.add_argument("--hybrid-channel", type=bool, default=False,
+                        help="hybrid memory")
 
     # Cache Options
     parser.add_argument("--external-memory-system", type=str,
