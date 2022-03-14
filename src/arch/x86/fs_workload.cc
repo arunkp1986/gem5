@@ -144,13 +144,13 @@ FsWorkload::initState()
 
     const Addr PageMapLevel4 = 0x70000;
     const Addr PageDirPtrTable = 0x71000;
-    //const Addr PageDirTable[NumPDTs] =
-        //{0x72000, 0x73000, 0x74000, 0x75000};
     const Addr PageDirTable[NumPDTs] =
-        {0x72000, 0x73000, 0x74000, 0x75000, 0x76000, 0x77000};
+        {0x72000, 0x73000, 0x74000, 0x75000,0x77000,0x7800};
+    //const Addr PageDirTable[NumPDTs] =
+      //  {0x72000, 0x73000, 0x74000, 0x75000, 0x76000, 0x77000};
 
-    //const Addr GDTBase = 0x76000;
-    const Addr GDTBase = 0x78000;
+    const Addr GDTBase = 0x76000;
+    //const Addr GDTBase = 0x78000;
 
     const int PML4Bits = 9;
     const int PDPTBits = 9;

@@ -612,6 +612,7 @@ def makeLinuxX86System(mem_mode, numCPUs=1, mdesc=None, Ruby=False,
     # IO devices to be mapped to [0xC0000000, 0xFFFF0000). Requests to this
     # specific range can pass though bridge to iobus.
     if ((0xC0000000 - self.mem_ranges[0].size()) >= 1):
+        print("less than 3GB DRAM check\n")
         entries.append(X86E820Entry(addr = self.mem_ranges[0].size(),
             size='%dB' % (0xC0000000 - self.mem_ranges[0].size()),
             range_type=2))
