@@ -198,6 +198,9 @@ namespace X86ISA
             tlb = _tlb;
         }
 
+        int dirty_tlb_misses; //Added By KP Arun
+        int dirty_pagetable_reads; //Added By KP Arun
+
         using Params = X86PagetableWalkerParams;
 
         Walker(const Params &params) :
@@ -205,7 +208,9 @@ namespace X86ISA
             funcState(this, NULL, NULL, true), tlb(NULL), sys(params.system),
             requestorId(sys->getRequestorId(this)),
             numSquashable(params.num_squash_per_cycle),
-            startWalkWrapperEvent([this]{ startWalkWrapper(); }, name())
+            startWalkWrapperEvent([this]{ startWalkWrapper(); }, name()),
+            dirty_tlb_misses(0),
+            dirty_pagetable_reads(0)
         {
         }
     };

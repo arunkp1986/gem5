@@ -229,10 +229,12 @@ Fault
 Walker::WalkerState::startWalk()
 {
     Fault fault = NoFault;
+    Fault temp_fault = NoFault;
     assert(!started);
     started = true;
     setupWalk(req->getVaddr());
     if (timing) {
+        //std::cout<<"startwalk called"<<std::endl;
         nextState = state;
         state = Waiting;
         timingFault = NoFault;
@@ -362,9 +364,23 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
       case LongPTE:
         DPRINTF(PageTableWalker,
                 "Got long mode PTE entry %#016x.\n", (uint64_t)pte);
-        doWrite = !pte.a;
-        pte.a = 1;
+        //doWrite = !pte.a;
+        //pte.a = 1;
+        if (!pte.a){
+            pte.a = 1;
+            doWrite = true;
+        }
+
         entry.writable = entry.writable && pte.w;
+        if (!pte.d && entry.writable){
+            pte.d = 1;
+            doWrite = true;
+            DPRINTF(PageTableWalker,
+                "Got long mode PTE setting dirty bit.\n");
+        }
+        DPRINTF(PageTableWalker,
+                "Got long mode PTE entry %#016x.\n", (uint64_t)pte);
+
         entry.user = entry.user && pte.u;
         if (badNX || !pte.p) {
             doEndWalk = true;
@@ -512,6 +528,15 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         panic("Unknown page table walker state %d!\n");
     }
     if (doEndWalk) {
+        PacketPtr oldRead = read;
+         if (!functional && doWrite) {
+            write = oldRead;
+            write->setLE<uint64_t>(pte);
+            write->cmd = MemCmd::WriteReq;
+            read = NULL;
+        } else {
+            write = NULL;
+        }
         if (doTLBInsert)
             if (!functional)
                 walker->tlb->insert(entry.vaddr, entry);
@@ -551,6 +576,7 @@ void
 Walker::WalkerState::setupWalk(Addr vaddr)
 {
     VAddr addr = vaddr;
+    uint16_t tracking_log_gran = 0;
     CR3 cr3 = tc->readMiscRegNoEffect(MISCREG_CR3);
     // Check if we're in long mode or not
     Efer efer = tc->readMiscRegNoEffect(MISCREG_EFER);
@@ -595,6 +621,11 @@ Walker::WalkerState::setupWalk(Addr vaddr)
 
     read = new Packet(request, MemCmd::ReadReq);
     read->allocate();
+    tracking_log_gran = tc->readMiscRegNoEffect(\
+                    gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
+    if ( tracking_log_gran == 1 ){
+        read->set_is_dirty_bit_set(1);
+    }
 }
 
 bool
@@ -603,6 +634,7 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
     assert(pkt->isResponse());
     assert(inflight);
     assert(state == Waiting);
+    //uint16_t tracking_log_gran = 0;
     inflight--;
     if (squashed) {
         // if were were squashed, return true once inflight is zero and
@@ -624,9 +656,11 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
         state = Waiting;
         assert(timingFault == NoFault || read == NULL);
         if (write) {
+            //write->flags.set(STATIC_DATA);
             writes.push_back(write);
         }
         sendPackets();
+
     } else {
         sendPackets();
     }

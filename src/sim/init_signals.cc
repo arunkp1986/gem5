@@ -135,6 +135,9 @@ dumprstStatsHandler(int sigtype)
 void
 exitNowHandler(int sigtype)
 {
+    //std::cout<<"called exitNowHandler"<<std::endl;
+    //fsync(4);
+    //fsync(5);
     async_event = true;
     async_exit = true;
     /* Wake up some event queue to handle event */

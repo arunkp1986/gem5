@@ -314,7 +314,8 @@ TLB::translate(const RequestPtr &req,
     Request::Flags flags = req->getFlags();
     int seg = flags & SegmentFlagMask;
     bool storeCheck = flags & Request::READ_MODIFY_WRITE;
-
+    uint16_t tracking_log_gran = 0;
+    uint16_t tracking_dirty_read = 0;
     delayedResponse = false;
 
     // If this is true, we're dealing with a request to a non-memory address

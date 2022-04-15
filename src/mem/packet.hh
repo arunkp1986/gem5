@@ -365,6 +365,8 @@ class Packet : public Printable
     /// A pointer to the original request.
     RequestPtr req;
 
+    uint8_t is_dirty_bit;
+
   private:
    /**
     * A pointer to the data being transferred. It can be different
@@ -843,6 +845,14 @@ class Packet : public Printable
         cmd = MemCmd::ReadReq;
     }
 
+    uint8_t get_is_dirty_bit_set(){
+        return is_dirty_bit;
+    }
+
+    void set_is_dirty_bit_set(uint8_t value){
+        is_dirty_bit = value;
+    }
+
     /**
      * Constructor. Note that a Request object must be constructed
      * first, but the Requests's physical address and size fields need
@@ -850,6 +860,7 @@ class Packet : public Printable
      */
     Packet(const RequestPtr &_req, MemCmd _cmd)
         :  cmd(_cmd), id((PacketId)_req.get()), req(_req),
+           is_dirty_bit(0),
            data(nullptr), addr(0), _isSecure(false), size(0),
            _qosValue(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
@@ -891,6 +902,7 @@ class Packet : public Printable
      */
     Packet(const RequestPtr &_req, MemCmd _cmd, int _blkSize, PacketId _id = 0)
         :  cmd(_cmd), id(_id ? _id : (PacketId)_req.get()), req(_req),
+           is_dirty_bit(0),
            data(nullptr), addr(0), _isSecure(false),
            _qosValue(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
@@ -917,6 +929,7 @@ class Packet : public Printable
      */
     Packet(const PacketPtr pkt, bool clear_flags, bool alloc_data)
         :  cmd(pkt->cmd), id(pkt->id), req(pkt->req),
+           is_dirty_bit(0),
            data(nullptr),
            addr(pkt->addr), _isSecure(pkt->_isSecure), size(pkt->size),
            bytesValid(pkt->bytesValid),

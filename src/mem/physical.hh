@@ -163,7 +163,7 @@ class PhysicalMemory : public Serializable
     void createBackingStore(AddrRange range,
                             const std::vector<AbstractMemory*>& _memories,
                             bool conf_table_reported,
-                            bool in_addr_map, bool kvm_map);
+                            bool in_addr_map, bool kvm_map, int fd);
 
   public:
 

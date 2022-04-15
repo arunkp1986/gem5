@@ -40,6 +40,7 @@
 
 #include "mem/abstract_mem.hh"
 
+#include <cstdlib>
 #include <vector>
 
 #include "base/loader/memory_image.hh"
@@ -56,6 +57,7 @@ namespace gem5
 namespace memory
 {
 
+int AbstractMemory::MemCounter = 0;
 AbstractMemory::AbstractMemory(const Params &p) :
     ClockedObject(p), range(p.range), pmemAddr(NULL),
     backdoor(params().range, nullptr,
@@ -68,6 +70,12 @@ AbstractMemory::AbstractMemory(const Params &p) :
     panic_if(!range.valid() || !range.size(),
              "Memory range %s must be valid with non-zero size.",
              range.to_string());
+    //int MemCounter = 0;
+    sprintf(mem_file,"PhyMem.%d",getMemCounter());
+    //sprintf(mem_file,"PhyMem.%d", rand()%10+1);
+    fd = open(mem_file, O_RDWR | O_CREAT| O_DIRECT| O_SYNC, 0666);
+    printf("AbsMem fd: %d filename:%s\n", fd, mem_file);
+    assert(fd != -1);
 }
 
 void
