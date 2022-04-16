@@ -473,6 +473,9 @@ def makeX86System(mem_mode, numCPUs=1, mdesc=None, workload=None, Ruby=False):
 
         self.mem_ranges = [AddrRange('3GB'),
             AddrRange(Addr('4GB'), size = excess_mem_size)]
+    if(mdesc.nvm()):
+        self.mem_ranges = [AddrRange(mdesc.mem()),
+                AddrRange(Addr('4GB'), size = mdesc.nvm())]
 
     # Platform
     self.pc = Pc()
@@ -610,7 +613,7 @@ def makeLinuxX86System(mem_mode, numCPUs=1, mdesc=None, Ruby=False,
     # Mark [mem_size, 3GB) as reserved if memory less than 3GB, which force
     # IO devices to be mapped to [0xC0000000, 0xFFFF0000). Requests to this
     # specific range can pass though bridge to iobus.
-    if len(self.mem_ranges) == 1:
+    if ((0xC0000000 - self.mem_ranges[0].size()) >= 1):
         entries.append(X86E820Entry(addr = self.mem_ranges[0].size(),
             size='%dB' % (0xC0000000 - self.mem_ranges[0].size()),
             range_type=2))

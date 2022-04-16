@@ -324,7 +324,7 @@ else:
                         mem=args.mem_size, os_type=args.os_type)]
     else:
         bm = [SysConfig(disks=args.disk_image, rootdev=args.root_device,
-                        mem=args.mem_size, os_type=args.os_type)]
+                mem=args.mem_size, nvm=args.nvm_size, os_type=args.os_type)]
 
 np = args.num_cpus
 

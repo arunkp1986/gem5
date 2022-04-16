@@ -139,12 +139,16 @@ FsWorkload::initState()
     // while allowing consistency checks and the underlying mechansims
     // just to be safe.
 
-    const int NumPDTs = 4;
+    //const int NumPDTs = 4;
+    const int NumPDTs = 6;
 
     const Addr PageMapLevel4 = 0x70000;
     const Addr PageDirPtrTable = 0x71000;
+    //const Addr PageDirTable[NumPDTs] =
+       // {0x72000, 0x73000, 0x74000, 0x75000};
     const Addr PageDirTable[NumPDTs] =
-        {0x72000, 0x73000, 0x74000, 0x75000};
+        {0x72000, 0x73000, 0x74000, 0x75000, 0x77000, 0x78000};
+
     const Addr GDTBase = 0x76000;
 
     const int PML4Bits = 9;

@@ -118,7 +118,7 @@ PhysicalMemory::PhysicalMemory(const std::string& _name,
             std::vector<AbstractMemory*> unmapped_mems{m};
             createBackingStore(m->getAddrRange(), unmapped_mems,
                                m->isConfReported(), m->isInAddrMap(),
-                               m->isKvmMap());
+                               m->isKvmMap(), m->fd);
         }
     }
 
@@ -150,7 +150,7 @@ PhysicalMemory::PhysicalMemory(const std::string& _name,
 
                     createBackingStore(merged_range, curr_memories,
                                        f->isConfReported(), f->isInAddrMap(),
-                                       f->isKvmMap());
+                                       f->isKvmMap(), f->fd);
 
                     intlv_ranges.clear();
                     curr_memories.clear();
@@ -162,7 +162,8 @@ PhysicalMemory::PhysicalMemory(const std::string& _name,
                 createBackingStore(r.first, single_memory,
                                    r.second->isConfReported(),
                                    r.second->isInAddrMap(),
-                                   r.second->isKvmMap());
+                                   r.second->isKvmMap(),
+                                   r.second->fd);
             }
         }
     }
@@ -182,14 +183,16 @@ PhysicalMemory::PhysicalMemory(const std::string& _name,
 
         createBackingStore(merged_range, curr_memories,
                            f->isConfReported(), f->isInAddrMap(),
-                           f->isKvmMap());
+                           f->isKvmMap(), f->fd);
     }
 }
+
+uint8_t* pmem_copy;
 
 void
 PhysicalMemory::createBackingStore(
         AddrRange range, const std::vector<AbstractMemory*>& _memories,
-        bool conf_table_reported, bool in_addr_map, bool kvm_map)
+        bool conf_table_reported, bool in_addr_map, bool kvm_map, int fd)
 {
     panic_if(range.interleaved(),
              "Cannot create backing store for interleaved range %s\n",
@@ -204,7 +207,16 @@ PhysicalMemory::createBackingStore(
 
     if (sharedBackstore.empty()) {
         shm_fd = -1;
-        map_flags =  MAP_ANON | MAP_PRIVATE;
+        if (fd == -1){
+            map_flags =  MAP_ANON | MAP_PRIVATE;
+        }
+        else{
+            map_flags = MAP_SHARED;
+            std::cout << "calling fallocate of size " \
+                    << range.size() << std::endl;
+            assert(posix_fallocate(fd, 0, range.size()) == 0);
+            shm_fd = fd;
+        }
     } else {
         DPRINTF(AddrRanges, "Sharing backing store as %s\n",
                 sharedBackstore.c_str());
@@ -231,6 +243,7 @@ PhysicalMemory::createBackingStore(
         fatal("Could not mmap %d bytes for range %s!\n", range.size(),
               range.to_string());
     }
+    pmem_copy = pmem;
 
     // remember this backing store so we can checkpoint it and unmap
     // it appropriately
@@ -320,6 +333,7 @@ PhysicalMemory::serialize(CheckpointOut &cp) const
     std::vector<ContextID> lal_cid;
 
     for (auto& m : memories) {
+        fsync(m->fd);
         const std::list<LockedAddr>& locked_addrs = m->getLockedAddrList();
         for (const auto& l : locked_addrs) {
             lal_addr.push_back(l.addr);

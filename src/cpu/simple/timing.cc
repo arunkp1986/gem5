@@ -318,6 +318,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
     Addr tracking_address = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+
     if (bitset_pending){
         std::cout<<"queue waiting loop hit sendData"<<std::endl;
     }
@@ -328,6 +329,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     if ((tracking_log_gran > 1) &&\
                 ((stack_start <= req->getVaddr()) &&\
         (req->getVaddr() <= stack_end)) && pkt->isWrite()){
+        flag = 0;
         //std::cout<<"Dirty Tracking On"<<std::endl;
         DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
         RequestPtr tracker_req(new Request(*pkt->req));
@@ -357,7 +359,6 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         if (tracking_log_gran == 1 &&\
                         ((tracking_address <= req->getVaddr()) &&\
                         (req->getVaddr() < tracking_address+64)) && flag == 0){
-            //dirty_tracking_done = 1;
             std::cout<<"tracking address: "<<\
                     std::hex<<tracking_address<<std::endl;
             std::cout<<"num_dirty_packets: "<<\
@@ -1385,25 +1386,14 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
                 PacketPtr tracker_pkt, uint16_t isdone){
     uint8_t bitmap_value[4];
     uint32_t bitmap_pos = tracker_pkt->getDirtybitPos();
-    //std::cout<<"comparator write bitmap pos: "
-    //<<std::hex<<bitmap_pos<<std::endl;
     tracker_pkt->getData(bitmap_value);
-    //std::cout<<"bitmap: "<<\
-    //std::hex<<static_cast<unsigned>(bitmap_value[0])<<\
-    //std::endl;
     uint32_t temp = 0;
     memcpy(&temp, bitmap_value, 4);
     temp |= bitmap_pos;
     memcpy(bitmap_value, &temp, 4);
-    //std::cout<<"bitmap: "<<\
-    //std::hex<<static_cast<unsigned>(bitmap_value[0])<<\
-    //std::endl;
     tracker_pkt->setData(bitmap_value);
     Addr dirty_address = tracker_pkt->getAddr() ;
     (cpu->dirty_lookup[dirty_address]).first = 1;
-    //std::cout<<"processing num packets: "<<\
-    //static_cast<unsigned>(cpu->dirty_count[dirty_address])<<\
-    //std::endl;
     tracker_pkt->setTcmd(MemCmd::WriteReq);
     tracker_pkt->setTracker(1);
     if (!sendTimingReq(tracker_pkt)) {

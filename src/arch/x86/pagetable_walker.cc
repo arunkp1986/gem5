@@ -365,6 +365,12 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = entry.writable && pte.w;
+        if (!pte.d && entry.writable){
+            pte.d = 1;
+            doWrite = true;
+            DPRINTF(PageTableWalker,
+                "Got long mode PTE setting dirty bit.\n");
+        }
         entry.user = entry.user && pte.u;
         if (badNX || !pte.p) {
             doEndWalk = true;
@@ -512,6 +518,15 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         panic("Unknown page table walker state %d!\n");
     }
     if (doEndWalk) {
+        PacketPtr oldRead = read;
+         if (!functional && doWrite) {
+            write = oldRead;
+            write->setLE<uint64_t>(pte);
+            write->cmd = MemCmd::WriteReq;
+            read = NULL;
+        } else {
+            write = NULL;
+        }
         if (doTLBInsert)
             if (!functional)
                 walker->tlb->insert(entry.vaddr, entry);

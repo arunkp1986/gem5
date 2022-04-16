@@ -46,6 +46,10 @@
 #ifndef __MEM_ABSTRACT_MEMORY_HH__
 #define __MEM_ABSTRACT_MEMORY_HH__
 
+#include <fcntl.h>
+
+#include <cstdio>
+
 #include "mem/backdoor.hh"
 #include "mem/port.hh"
 #include "params/AbstractMemory.hh"
@@ -212,7 +216,9 @@ class AbstractMemory : public ClockedObject
   public:
 
     PARAMS(AbstractMemory);
-
+    static int MemCounter;
+    int fd;
+    char mem_file[32];
     AbstractMemory(const Params &p);
     virtual ~AbstractMemory() {}
 
@@ -349,6 +355,7 @@ class AbstractMemory : public ClockedObject
      * @param pkt Packet performing the access
      */
     void functionalAccess(PacketPtr pkt);
+    int getMemCounter() { return MemCounter++;}
 };
 
 } // namespace memory

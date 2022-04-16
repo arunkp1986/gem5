@@ -61,8 +61,8 @@
  *
  * */
 #define LOOKUP_SIZE 16
-#define HIGH_WATERMARK 4
-#define LOW_WATERMARK 2
+#define HIGH_WATERMARK 24
+#define LOW_WATERMARK 8
 namespace gem5
 {
 
