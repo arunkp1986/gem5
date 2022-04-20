@@ -279,6 +279,8 @@ class TimingSimpleCPU : public BaseSimpleCPU
     PacketPtr dcache_tracker_pkt;
     uint16_t num_dirty_packets;
     uint16_t dirty_tracking_done;
+    Addr bitmap_address;
+    uint8_t flag;
     std::atomic<std::uint8_t> bitset_pending;
 
     Cycles previousCycle;
@@ -326,7 +328,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
     std::unordered_map<Addr,PacketPtr> dirty_packet; //Added by Arun KP
     std::unordered_map<Addr,uint8_t> dirty_count; //Added by Arun KP
     void comparator();
-    void comparator_flush();
+    void comparator_flush(PacketPtr);
     void comparator_selective_flush();
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
                          AtomicOpFunctorPtr amo_op) override;

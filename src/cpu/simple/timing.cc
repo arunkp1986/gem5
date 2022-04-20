@@ -269,7 +269,6 @@ TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
 {
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
-
     const RequestPtr &req = pkt->req;
 
     // hardware transactional memory
@@ -288,7 +287,7 @@ TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
         new IprEvent(pkt, this, clockEdge(delay));
         _status = DcacheWaitResponse;
         dcache_pkt = NULL;
-    } else if (!dcachePort.sendTimingReq(pkt)) {
+    }else if (!dcachePort.sendTimingReq(pkt)) {
         _status = DcacheRetry;
         dcache_pkt = pkt;
     } else {
@@ -307,7 +306,6 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     SimpleThread* thread = t_info.thread;
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
-    static uint8_t flag = 0;
 
     ThreadContext *tc = thread->getTC();
     Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
@@ -318,7 +316,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
     Addr tracking_address = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
-
+    bitmap_address = tracking_address;
     if (bitset_pending){
         std::cout<<"queue waiting loop hit sendData"<<std::endl;
     }
@@ -330,6 +328,8 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                 ((stack_start <= req->getVaddr()) &&\
         (req->getVaddr() <= stack_end)) && pkt->isWrite()){
         flag = 0;
+        num_dirty_packets = 0;
+        dirty_tracking_done = 0;
         //std::cout<<"Dirty Tracking On"<<std::endl;
         DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
         RequestPtr tracker_req(new Request(*pkt->req));
@@ -359,16 +359,9 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         if (tracking_log_gran == 1 &&\
                         ((tracking_address <= req->getVaddr()) &&\
                         (req->getVaddr() < tracking_address+64)) && flag == 0){
-            std::cout<<"tracking address: "<<\
-                    std::hex<<tracking_address<<std::endl;
-            std::cout<<"num_dirty_packets: "<<\
-                    num_dirty_packets<<std::endl;
-            std::cout<<"dirty_tracking_done: "<<\
-                    dirty_tracking_done<<std::endl;
             //process any pending requests in queue
-            comparator_flush();
+            comparator_flush(pkt);
             dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
-            flag += 1;
         }
 
         handleReadPacket(pkt);
@@ -391,6 +384,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
             completeDataAccess(pkt);
         }
     }
+
    if (!comparator_list.empty()){
        comparator();
    }
@@ -581,7 +575,7 @@ TimingSimpleCPU::handleWritePacket()
 /*Added by KP Arun.*/
 
 void
-TimingSimpleCPU::comparator_flush(){
+TimingSimpleCPU::comparator_flush(PacketPtr read_pkt){
     Addr dirty_address = 0;
     uint32_t value = 0;
     for (auto it = dirty_lookup.begin(); it != dirty_lookup.end(); ++it){
@@ -606,7 +600,6 @@ TimingSimpleCPU::comparator_flush(){
             }
             else {
                 DPRINTF(Stackp, "setting DcacheWaitResponse\n");
-                //std::cout<<"comparator_flush read sent"<<std::endl;
                 _trackerstatus = DcacheWaitTrackerResponse;
                 dcache_tracker_pkt = NULL;
                 num_dirty_packets += 1;
@@ -1432,6 +1425,29 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
         delete pkt;
         return true;
     }
+    if (cpu->bitmap_address == pkt->getAddr()){
+        if (!cpu->flag){
+            cpu->flag = 1;
+        }
+        else{
+            std::cout<<"got resp to bitmap read"<<std::endl;
+            std::cout<<"num_dirty_packets: "<<\
+                    cpu->num_dirty_packets<<std::endl;
+            std::cout<<"dirty_tracking_done: "<<\
+                    cpu->dirty_tracking_done<<std::endl;
+
+        if ( cpu->num_dirty_packets != cpu->dirty_tracking_done ){
+            cpu->schedule(retryRespEvent, cpu->clockEdge(Cycles(100)));
+            return false;
+        }
+        else{
+            if (!tickEvent.scheduled()) {
+                tickEvent.schedule(pkt, cpu->clockEdge(Cycles(1)));
+                return true;
+            }
+        }
+       }
+    }
 
     // The timing CPU is not really ticked, instead it relies on the
     // memory system (fetch and load/store) to set the pace.
@@ -1468,6 +1484,7 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
     assert(cpu->_status == DcacheRetry ||
                    cpu->_trackerstatus == DcacheTrackerRetry);
     PacketPtr tmp;
+    std::cout<<"recvReqRetry called"<<std::endl;
     if (cpu->_status == DcacheRetry){
         tmp = cpu->dcache_pkt;
         if (tmp->senderState) {

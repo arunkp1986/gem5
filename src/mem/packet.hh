@@ -394,7 +394,6 @@ class Packet : public Printable
     // Quality of Service priority value
     uint8_t _qosValue;
 
-    uint8_t tracker_pkt;
 
     uint32_t dirtybit_pos;
 
@@ -416,6 +415,7 @@ class Packet : public Printable
 
   public:
 
+    uint8_t tracker_pkt;
     /**
      * The extra delay from seeing the packet until the header is
      * transmitted. This delay is used to communicate the crossbar
@@ -862,9 +862,9 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd)
         :  cmd(_cmd), id((PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false), size(0),
-           _qosValue(0),tracker_pkt(0),dirtybit_pos(0),
+           _qosValue(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0),tracker_pkt(0),
            headerDelay(0), snoopDelay(0),
            payloadDelay(0), senderState(NULL)
     {
@@ -903,9 +903,9 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd, int _blkSize, PacketId _id = 0)
         :  cmd(_cmd), id(_id ? _id : (PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false),
-           _qosValue(0),tracker_pkt(0),dirtybit_pos(0),
+           _qosValue(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0),tracker_pkt(0),
            headerDelay(0),
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
@@ -932,10 +932,9 @@ class Packet : public Printable
            addr(pkt->addr), _isSecure(pkt->_isSecure), size(pkt->size),
            bytesValid(pkt->bytesValid),
            _qosValue(pkt->qosValue()),
-           tracker_pkt(pkt->tracker_pkt),
            dirtybit_pos(pkt->dirtybit_pos),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0),tracker_pkt(pkt->tracker_pkt),
            headerDelay(pkt->headerDelay),
            snoopDelay(0),
            payloadDelay(pkt->payloadDelay),
