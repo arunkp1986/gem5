@@ -41,6 +41,11 @@
 
 #include "cpu/simple/timing.hh"
 
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <csignal>
+
 #include "arch/locked_mem.hh"
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/regs/msr.hh"
@@ -306,7 +311,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     SimpleThread* thread = t_info.thread;
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
-
+    static uint8_t r_flag = 0;
     ThreadContext *tc = thread->getTC();
     Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_TRACK_START);
@@ -328,6 +333,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                 ((stack_start <= req->getVaddr()) &&\
         (req->getVaddr() <= stack_end)) && pkt->isWrite()){
         flag = 0;
+        r_flag = 0;
         num_dirty_packets = 0;
         dirty_tracking_done = 0;
         //std::cout<<"Dirty Tracking On"<<std::endl;
@@ -356,15 +362,39 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         pkt->makeResponse();
         completeDataAccess(pkt);
     } else if (read) {
-        if (tracking_log_gran == 1 &&\
-                        ((tracking_address <= req->getVaddr()) &&\
-                        (req->getVaddr() < tracking_address+64)) && flag == 0){
+        if (tracking_log_gran == 1){
             //process any pending requests in queue
-            comparator_flush(pkt);
-            dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
+            if ((tracking_address == req->getVaddr()) && !r_flag){
+                //std::cout<<"going to flush comparator"<<std::endl;
+                r_flag = 1;
+                comparator_flush();
+                dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
+                dirty_packet.erase(dirty_packet.begin(), dirty_packet.end());
+                dirty_count.erase(dirty_count.begin(), dirty_count.end());
+                handleReadPacket(pkt);
+            }
+            else{
+                if (num_dirty_packets != dirty_tracking_done){
+                    read_list.push_back(pkt);
+                }
+                else if (!read_list.empty()){
+                    std::cout<<"read list size: "<<\
+                           read_list.size() <<std::endl;
+                    for (auto it = read_list.begin();
+                                    it != read_list.end(); it++){
+                        handleReadPacket(*it);
+                    }
+                    read_list.erase(read_list.begin(),read_list.end());
+                    handleReadPacket(pkt);
+                }
+                else{
+                    handleReadPacket(pkt);
+                }
+            }
         }
-
-        handleReadPacket(pkt);
+        else{
+            handleReadPacket(pkt);
+        }
     } else {
         bool do_access = true;  // flag to suppress cache access
 
@@ -575,7 +605,7 @@ TimingSimpleCPU::handleWritePacket()
 /*Added by KP Arun.*/
 
 void
-TimingSimpleCPU::comparator_flush(PacketPtr read_pkt){
+TimingSimpleCPU::comparator_flush(){
     Addr dirty_address = 0;
     uint32_t value = 0;
     for (auto it = dirty_lookup.begin(); it != dirty_lookup.end(); ++it){
@@ -594,7 +624,7 @@ TimingSimpleCPU::comparator_flush(PacketPtr read_pkt){
             tracker_pkt->setDirtybitPos(value);
             if (!dcachePort.sendTimingReq(tracker_pkt)) {
                 DPRINTF(Stackp, "sending failed\n");
-                std::cout<<"sending failed"<<std::endl;
+                std::cout<<"sending failed comparator flush"<<std::endl;
                 _trackerstatus = DcacheTrackerRetry;
                 dcache_tracker_pkt = tracker_pkt;
             }
@@ -635,7 +665,9 @@ TimingSimpleCPU::comparator_selective_flush(){
             if (value){
                 tracker_pkt->setDirtybitPos(value);
                 if (!dcachePort.sendTimingReq(tracker_pkt)) {
-                    DPRINTF(Stackp, "sending failed\n");
+                    std::cout<<\
+                            "sending failed comparator selective flush"<<\
+                            std::endl;
                     _trackerstatus = DcacheTrackerRetry;
                     dcache_tracker_pkt = tracker_pkt;
                 }
@@ -745,7 +777,7 @@ TimingSimpleCPU::comparator(){
             uint32_t value = (dirty_lookup[dirty_address]).second;
             tracker_pkt->setDirtybitPos(value);
             if (!dcachePort.sendTimingReq(tracker_pkt)) {
-                DPRINTF(Stackp, "sending failed\n");
+                DPRINTF(Stackp, "sending failed comparator\n");
                 _trackerstatus = DcacheTrackerRetry;
                 dcache_tracker_pkt = tracker_pkt;
             }
@@ -1430,13 +1462,12 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
             cpu->flag = 1;
         }
         else{
+        if ( cpu->num_dirty_packets != cpu->dirty_tracking_done ){
             std::cout<<"got resp to bitmap read"<<std::endl;
             std::cout<<"num_dirty_packets: "<<\
                     cpu->num_dirty_packets<<std::endl;
             std::cout<<"dirty_tracking_done: "<<\
                     cpu->dirty_tracking_done<<std::endl;
-
-        if ( cpu->num_dirty_packets != cpu->dirty_tracking_done ){
             cpu->schedule(retryRespEvent, cpu->clockEdge(Cycles(100)));
             return false;
         }

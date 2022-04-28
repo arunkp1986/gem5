@@ -327,8 +327,9 @@ class TimingSimpleCPU : public BaseSimpleCPU
             dirty_lookup; //Added by Arun KP
     std::unordered_map<Addr,PacketPtr> dirty_packet; //Added by Arun KP
     std::unordered_map<Addr,uint8_t> dirty_count; //Added by Arun KP
+    std::list<PacketPtr> read_list; //Added by Arun KP
     void comparator();
-    void comparator_flush(PacketPtr);
+    void comparator_flush();
     void comparator_selective_flush();
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
                          AtomicOpFunctorPtr amo_op) override;
