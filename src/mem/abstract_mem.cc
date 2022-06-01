@@ -71,10 +71,11 @@ AbstractMemory::AbstractMemory(const Params &p) :
     panic_if(!range.valid() || !range.size(),
              "Memory range %s must be valid with non-zero size.",
              range.to_string());
-    sprintf(mem_file,"PhyMem.%d",getMemCounter());
-    fd = open(mem_file, O_RDWR | O_CREAT| O_DIRECT| O_SYNC, 0666);
-    printf("AbsMem fd: %d filename:%s\n", fd, mem_file);
-    assert(fd != -1);
+    //sprintf(mem_file,"PhyMem.%d",getMemCounter());
+    //fd = open(mem_file, O_RDWR | O_CREAT| O_DIRECT| O_SYNC, 0666);
+    //printf("AbsMem fd: %d filename:%s\n", fd, mem_file);
+    //assert(fd != -1);
+    fd = -1;
 }
 
 void
