@@ -312,7 +312,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
     static uint8_t r_flag = 0;
-    static uint64_t min_address = 0xffffffffffffffff;
+    static uint64_t min_address = 0xFFFFFFFFFF;
     ThreadContext *tc = thread->getTC();
     Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_TRACK_START);
@@ -323,10 +323,6 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     Addr tracking_address = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
     bitmap_address = tracking_address;
-    /*if (bitset_pending){
-        std::cout<<"queue waiting loop hit sendData"<<std::endl;
-    }
-    while (bitset_pending == 1);*/
 
     /*here we are checking the tracking is still valid
      * and vaddr in req is of interest*/
@@ -378,7 +374,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                 tc->setMiscRegNoEffect(\
                                 gem5::X86ISA::MISCREG_DIRTYMAP_ADDR,\
                                 min_address);
-                min_address = 0xffffffffffffffff;
+                min_address = 0xFFFFFFFFFF;
                 comparator_flush();
                 handleReadPacket(pkt);
             }
@@ -830,7 +826,7 @@ TimingSimpleCPU::comparator(){
             dirty_count[dirty_address] = 0;
             (dirty_lookup[dirty_address]).second = 0;
             if (!dcachePort.sendTimingReq(tracker_pkt)) {
-                DPRINTF(Stackp, "sending failed comparator\n");
+                 std::cout<<"sending failed comparator"<<std::endl;
                 _trackerstatus = DcacheTrackerRetry;
                 dcache_tracker_pkt = tracker_pkt;
             }
@@ -1269,14 +1265,6 @@ TimingSimpleCPU::IcachePort::recvReqRetry()
 void
 TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
 {
-    //DPRINTF(Stackp, "Address:%x\n",pkt->getAddr());
-    /*if (pkt->getAddr() == (Addr)0x641C000){
-        DPRINTF(Stackp, "Address:%x\n",pkt->getAddr());
-        DPRINTF(Stackp, "status:%x\n",_status);
-
-        delete pkt;
-        return;
-    }*/
 
     // hardware transactional memory
 
@@ -1287,12 +1275,6 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     // received a response from the dcache: complete the load or store
     // instruction
     assert(!pkt->isError());
-/*
-    if (!(_status == DcacheWaitResponse ||
-    _status == DTBWaitResponse ||
-    pkt->req->getFlags().isSet(Request::NO_ACCESS))){
-        std::cout<<"bug"<<std::endl;
-    }*/
 
     assert(_status == DcacheWaitResponse || _status == DTBWaitResponse ||
            pkt->req->getFlags().isSet(Request::NO_ACCESS));
@@ -1494,6 +1476,7 @@ bool
 TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(SimpleCPU, "Received load/store response %#x\n", pkt->getAddr());
+
     //Added by KP Arun
     if (pkt->getTracker()){
         if (pkt->isRead()){
@@ -1505,7 +1488,7 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
              //std::cout<<"WResp Address: "<<pkt->getAddr()<<std::endl;
         }
         //std::cout<<"got tracker packet"<<std::endl;
-        delete pkt;
+        //delete pkt;
         return true;
     }
 
