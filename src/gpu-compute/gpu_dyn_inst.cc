@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -284,6 +282,18 @@ GPUDynInst::seqNum() const
     return _seqNum;
 }
 
+Addr
+GPUDynInst::pc()
+{
+    return wavefront()->pc();
+}
+
+void
+GPUDynInst::pc(Addr _pc)
+{
+    wavefront()->pc(_pc);
+}
+
 enums::StorageClassType
 GPUDynInst::executedAs()
 {
@@ -414,6 +424,12 @@ bool
 GPUDynInst::isFlat() const
 {
     return _staticInst->isFlat();
+}
+
+bool
+GPUDynInst::isFlatGlobal() const
+{
+    return _staticInst->isFlatGlobal();
 }
 
 bool

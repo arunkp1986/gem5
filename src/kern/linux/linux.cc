@@ -36,6 +36,7 @@
 #include "debug/SyscallVerbose.hh"
 #include "sim/mem_state.hh"
 #include "sim/process.hh"
+#include "sim/se_workload.hh"
 #include "sim/system.hh"
 #include "sim/vma.hh"
 
@@ -77,7 +78,7 @@ Linux::openSpecialFile(std::string path, Process *process,
     if (matched) {
         FILE *f = tmpfile();
         int fd = fileno(f);
-        GEM5_VAR_USED size_t ret = fwrite(data.c_str(), 1, data.size(), f);
+        [[maybe_unused]] size_t ret = fwrite(data.c_str(), 1, data.size(), f);
         assert(ret == data.size());
         rewind(f);
         return fd;
@@ -94,8 +95,8 @@ std::string
 Linux::procMeminfo(Process *process, ThreadContext *tc)
 {
     return csprintf("MemTotal:%12d kB\nMemFree: %12d kB\n",
-            process->system->memSize() >> 10,
-            process->system->freeMemSize() >> 10);
+            process->seWorkload->memSize() >> 10,
+            process->seWorkload->freeMemSize() >> 10);
 }
 
 std::string

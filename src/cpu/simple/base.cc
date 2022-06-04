@@ -41,6 +41,7 @@
 
 #include "cpu/simple/base.hh"
 
+#include "arch/generic/decoder.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
 #include "base/loader/symtab.hh"
@@ -93,10 +94,11 @@ BaseSimpleCPU::BaseSimpleCPU(const BaseSimpleCPUParams &p)
     for (unsigned i = 0; i < numThreads; i++) {
         if (FullSystem) {
             thread = new SimpleThread(
-                this, i, p.system, p.mmu, p.isa[i]);
+                this, i, p.system, p.mmu, p.isa[i], p.decoder[i]);
         } else {
             thread = new SimpleThread(
-                this, i, p.system, p.workload[i], p.mmu, p.isa[i]);
+                this, i, p.system, p.workload[i], p.mmu, p.isa[i],
+                p.decoder[i]);
         }
         threadInfo.push_back(new SimpleExecContext(this, thread));
         ThreadContext *tc = thread->getTC();
@@ -112,32 +114,22 @@ BaseSimpleCPU::BaseSimpleCPU(const BaseSimpleCPUParams &p)
         checker->setSystem(p.system);
         // Manipulate thread context
         ThreadContext *cpu_tc = threadContexts[0];
-        threadContexts[0] = new CheckerThreadContext<ThreadContext>(cpu_tc, this->checker);
+        threadContexts[0] = new CheckerThreadContext<ThreadContext>(
+                cpu_tc, this->checker);
     } else {
         checker = NULL;
     }
 }
 
 void
-BaseSimpleCPU::init()
-{
-    BaseCPU::init();
-
-    for (auto tc : threadContexts) {
-        // Initialise the ThreadContext's memory proxies
-        tc->initMemProxies(tc);
-    }
-}
-
-void
 BaseSimpleCPU::checkPcEventQueue()
 {
-    Addr oldpc, pc = threadInfo[curThread]->thread->instAddr();
+    Addr oldpc, pc = threadInfo[curThread]->thread->pcState().instAddr();
     do {
         oldpc = pc;
         threadInfo[curThread]->thread->pcEventQueue.service(
                 oldpc, threadContexts[curThread]);
-        pc = threadInfo[curThread]->thread->instAddr();
+        pc = threadInfo[curThread]->thread->pcState().instAddr();
     } while (oldpc != pc);
 }
 
@@ -279,7 +271,7 @@ BaseSimpleCPU::checkForInterrupts()
             t_info.fetchOffset = 0;
             interrupts[curThread]->updateIntrInfo();
             interrupt->invoke(tc);
-            thread->decoder.reset();
+            thread->decoder->reset();
         }
     }
 }
@@ -292,13 +284,13 @@ BaseSimpleCPU::setupFetchRequest(const RequestPtr &req)
     SimpleThread* thread = t_info.thread;
 
     auto &decoder = thread->decoder;
-    Addr instAddr = thread->instAddr();
-    Addr fetchPC = (instAddr & decoder.pcMask()) + t_info.fetchOffset;
+    Addr instAddr = thread->pcState().instAddr();
+    Addr fetchPC = (instAddr & decoder->pcMask()) + t_info.fetchOffset;
 
     // set up memory request for instruction fetch
     DPRINTF(Fetch, "Fetch: Inst PC:%08p, Fetch PC:%08p\n", instAddr, fetchPC);
 
-    req->setVirt(fetchPC, decoder.moreBytesSize(), Request::INST_FETCH,
+    req->setVirt(fetchPC, decoder->moreBytesSize(), Request::INST_FETCH,
                  instRequestorId(), instAddr);
 }
 
@@ -323,34 +315,35 @@ BaseSimpleCPU::preExecute()
     t_info.setMemAccPredicate(true);
 
     // decode the instruction
-    TheISA::PCState pcState = thread->pcState();
+    set(preExecuteTempPC, thread->pcState());
+    auto &pc_state = *preExecuteTempPC;
 
     auto &decoder = thread->decoder;
 
-    if (isRomMicroPC(pcState.microPC())) {
+    if (isRomMicroPC(pc_state.microPC())) {
         t_info.stayAtPC = false;
-        curStaticInst = decoder.fetchRomMicroop(
-                pcState.microPC(), curMacroStaticInst);
+        curStaticInst = decoder->fetchRomMicroop(
+                pc_state.microPC(), curMacroStaticInst);
     } else if (!curMacroStaticInst) {
         //We're not in the middle of a macro instruction
         StaticInstPtr instPtr = NULL;
 
         //Predecode, ie bundle up an ExtMachInst
         //If more fetch data is needed, pass it in.
-        Addr fetchPC =
-            (pcState.instAddr() & decoder.pcMask()) + t_info.fetchOffset;
+        Addr fetch_pc =
+            (pc_state.instAddr() & decoder->pcMask()) + t_info.fetchOffset;
 
-        decoder.moreBytes(pcState, fetchPC);
+        decoder->moreBytes(pc_state, fetch_pc);
 
         //Decode an instruction if one is ready. Otherwise, we'll have to
         //fetch beyond the MachInst at the current pc.
-        instPtr = decoder.decode(pcState);
+        instPtr = decoder->decode(pc_state);
         if (instPtr) {
             t_info.stayAtPC = false;
-            thread->pcState(pcState);
+            thread->pcState(pc_state);
         } else {
             t_info.stayAtPC = true;
-            t_info.fetchOffset += decoder.moreBytesSize();
+            t_info.fetchOffset += decoder->moreBytesSize();
         }
 
         //If we decoded an instruction and it's microcoded, start pulling
@@ -358,13 +351,13 @@ BaseSimpleCPU::preExecute()
         if (instPtr && instPtr->isMacroop()) {
             curMacroStaticInst = instPtr;
             curStaticInst =
-                curMacroStaticInst->fetchMicroop(pcState.microPC());
+                curMacroStaticInst->fetchMicroop(pc_state.microPC());
         } else {
             curStaticInst = instPtr;
         }
     } else {
         //Read the next micro op from the macro op
-        curStaticInst = curMacroStaticInst->fetchMicroop(pcState.microPC());
+        curStaticInst = curMacroStaticInst->fetchMicroop(pc_state.microPC());
     }
 
     //If we decoded an instruction this "tick", record information about it.
@@ -380,10 +373,10 @@ BaseSimpleCPU::preExecute()
         // Use a fake sequence number since we only have one
         // instruction in flight at the same time.
         const InstSeqNum cur_sn(0);
-        t_info.predPC = thread->pcState();
+        set(t_info.predPC, thread->pcState());
         const bool predict_taken(
-            branchPred->predict(curStaticInst, cur_sn, t_info.predPC,
-                                curThread));
+            branchPred->predict(curStaticInst, cur_sn, *t_info.predPC,
+                curThread));
 
         if (predict_taken)
             ++t_info.execContextStats.numPredictedBranches;
@@ -397,8 +390,7 @@ BaseSimpleCPU::postExecute()
 
     assert(curStaticInst);
 
-    TheISA::PCState pc = threadContexts[curThread]->pcState();
-    Addr instAddr = pc.instAddr();
+    Addr instAddr = threadContexts[curThread]->pcState().instAddr();
 
     if (curStaticInst->isMemRef()) {
         t_info.execContextStats.numMemRefs++;
@@ -472,21 +464,19 @@ BaseSimpleCPU::advancePC(const Fault &fault)
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
 
-    const bool branching(thread->pcState().branching());
+    const bool branching = thread->pcState().branching();
 
     //Since we're moving to a new pc, zero out the offset
     t_info.fetchOffset = 0;
     if (fault != NoFault) {
         curMacroStaticInst = nullStaticInstPtr;
         fault->invoke(threadContexts[curThread], curStaticInst);
-        thread->decoder.reset();
+        thread->decoder->reset();
     } else {
         if (curStaticInst) {
             if (curStaticInst->isLastMicroop())
                 curMacroStaticInst = nullStaticInstPtr;
-            TheISA::PCState pcState = thread->pcState();
-            curStaticInst->advancePC(pcState);
-            thread->pcState(pcState);
+            curStaticInst->advancePC(thread);
         }
     }
 
@@ -495,12 +485,13 @@ BaseSimpleCPU::advancePC(const Fault &fault)
         // instruction in flight at the same time.
         const InstSeqNum cur_sn(0);
 
-        if (t_info.predPC == thread->pcState()) {
+        if (*t_info.predPC == thread->pcState()) {
             // Correctly predicted branch
             branchPred->update(cur_sn, curThread);
         } else {
             // Mis-predicted branch
-            branchPred->squash(cur_sn, thread->pcState(), branching, curThread);
+            branchPred->squash(cur_sn, thread->pcState(), branching,
+                    curThread);
             ++t_info.execContextStats.numBranchMispred;
         }
     }

@@ -38,7 +38,7 @@
 #ifndef __ARCH_X86_PCSTATE_HH__
 #define __ARCH_X86_PCSTATE_HH__
 
-#include "arch/generic/types.hh"
+#include "arch/generic/pcstate.hh"
 #include "sim/serialize.hh"
 
 namespace gem5
@@ -50,11 +50,21 @@ namespace X86ISA
 class PCState : public GenericISA::UPCState<8>
 {
   protected:
-    typedef GenericISA::UPCState<8> Base;
+    using Base = GenericISA::UPCState<8>;
 
     uint8_t _size;
 
   public:
+    PCStateBase *clone() const override { return new PCState(*this); }
+
+    void
+    update(const PCStateBase &other) override
+    {
+        Base::update(other);
+        auto &pcstate = other.as<PCState>();
+        _size = pcstate._size;
+    }
+
     void
     set(Addr val)
     {
@@ -62,8 +72,10 @@ class PCState : public GenericISA::UPCState<8>
         _size = 0;
     }
 
+    PCState(const PCState &other) : Base(other), _size(other._size) {}
+    PCState &operator=(const PCState &other) = default;
     PCState() {}
-    PCState(Addr val) { set(val); }
+    explicit PCState(Addr val) { set(val); }
 
     void
     setNPC(Addr val)
@@ -76,14 +88,14 @@ class PCState : public GenericISA::UPCState<8>
     void size(uint8_t newSize) { _size = newSize; }
 
     bool
-    branching() const
+    branching() const override
     {
         return (this->npc() != this->pc() + size()) ||
                (this->nupc() != this->upc() + 1);
     }
 
     void
-    advance()
+    advance() override
     {
         Base::advance();
         _size = 0;
@@ -97,14 +109,14 @@ class PCState : public GenericISA::UPCState<8>
     }
 
     void
-    serialize(CheckpointOut &cp) const
+    serialize(CheckpointOut &cp) const override
     {
         Base::serialize(cp);
         SERIALIZE_SCALAR(_size);
     }
 
     void
-    unserialize(CheckpointIn &cp)
+    unserialize(CheckpointIn &cp) override
     {
         Base::unserialize(cp);
         UNSERIALIZE_SCALAR(_size);

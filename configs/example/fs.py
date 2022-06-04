@@ -97,7 +97,6 @@ def build_test_system(np):
             cmdline=cmdline,
             external_memory=args.external_memory_system,
             ruby=args.ruby,
-            security=args.enable_security_extensions,
             vio_9p=args.vio_9p,
             bootloader=args.bootloader,
         )
@@ -132,12 +131,6 @@ def build_test_system(np):
     if args.script is not None:
         test_sys.readfile = args.script
 
-    if args.lpae:
-        test_sys.have_lpae = True
-
-    if args.virtualisation:
-        test_sys.have_virtualization = True
-
     test_sys.init_param = args.init_param
 
     # For now, assign all the CPUs to the same clock domain
@@ -155,7 +148,7 @@ def build_test_system(np):
 
         # Connect the ruby io port to the PIO bus,
         # assuming that there is just one such port.
-        test_sys.iobus.master = test_sys.ruby._io_port.slave
+        test_sys.iobus.mem_side_ports = test_sys.ruby._io_port.in_ports
 
         for (i, cpu) in enumerate(test_sys.cpu):
             #
@@ -171,12 +164,12 @@ def build_test_system(np):
         if args.caches or args.l2cache:
             # By default the IOCache runs at the system clock
             test_sys.iocache = IOCache(addr_ranges = test_sys.mem_ranges)
-            test_sys.iocache.cpu_side = test_sys.iobus.master
-            test_sys.iocache.mem_side = test_sys.membus.slave
+            test_sys.iocache.cpu_side = test_sys.iobus.mem_side_ports
+            test_sys.iocache.mem_side = test_sys.membus.cpu_side_ports
         elif not args.external_memory_system:
             test_sys.iobridge = Bridge(delay='50ns', ranges = test_sys.mem_ranges)
-            test_sys.iobridge.slave = test_sys.iobus.master
-            test_sys.iobridge.master = test_sys.membus.slave
+            test_sys.iobridge.cpu_side_port = test_sys.iobus.mem_side_ports
+            test_sys.iobridge.mem_side_port = test_sys.membus.cpu_side_ports
 
         # Sanity check
         if args.simpoint_profile:
@@ -270,7 +263,7 @@ def build_drive_system(np):
                                   cpu_id=0)
     drive_sys.cpu.createThreads()
     drive_sys.cpu.createInterruptController()
-    drive_sys.cpu.connectAllPorts(drive_sys.membus)
+    drive_sys.cpu.connectBus(drive_sys.membus)
     if args.kernel is not None:
         drive_sys.workload.object_file = binary(args.kernel)
 
@@ -279,15 +272,15 @@ def build_drive_system(np):
 
     drive_sys.iobridge = Bridge(delay='50ns',
                                 ranges = drive_sys.mem_ranges)
-    drive_sys.iobridge.slave = drive_sys.iobus.master
-    drive_sys.iobridge.master = drive_sys.membus.slave
+    drive_sys.iobridge.cpu_side_port = drive_sys.iobus.mem_side_ports
+    drive_sys.iobridge.mem_side_port = drive_sys.membus.cpu_side_ports
 
     # Create the appropriate memory controllers and connect them to the
     # memory bus
     drive_sys.mem_ctrls = [DriveMemClass(range = r)
                            for r in drive_sys.mem_ranges]
     for i in range(len(drive_sys.mem_ctrls)):
-        drive_sys.mem_ctrls[i].port = drive_sys.membus.master
+        drive_sys.mem_ctrls[i].port = drive_sys.membus.mem_side_ports
 
     drive_sys.init_param = args.init_param
 
@@ -382,6 +375,9 @@ if buildEnv['TARGET_ISA'] == "arm" and not args.bare_metal \
             sys.workload.dtb_filename = \
                 os.path.join(m5.options.outdir, '%s.dtb' % sysname)
             sys.generateDtb(sys.workload.dtb_filename)
+
+if args.wait_gdb:
+    test_sys.workload.wait_for_remote_gdb = True
 
 Simulation.setWorkCountOptions(test_sys, args)
 Simulation.run(args, root, test_sys, FutureClass)

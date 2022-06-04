@@ -29,7 +29,7 @@
 #ifndef __ARCH_POWER_PCSTATE_HH__
 #define __ARCH_POWER_PCSTATE_HH__
 
-#include "arch/generic/types.hh"
+#include "arch/generic/pcstate.hh"
 #include "arch/power/types.hh"
 #include "enums/ByteOrder.hh"
 
@@ -42,23 +42,25 @@ namespace PowerISA
 class PCState : public GenericISA::SimplePCState<4>
 {
   private:
-    typedef GenericISA::SimplePCState<4> Base;
     ByteOrder guestByteOrder = ByteOrder::big;
 
   public:
-    PCState()
+    using GenericISA::SimplePCState<4>::SimplePCState;
+
+    PCState(const PCState &other) :
+        GenericISA::SimplePCState<4>(other),
+        guestByteOrder(other.guestByteOrder)
     {}
+    PCState &operator=(const PCState &other) = default;
+
+    PCStateBase *clone() const override { return new PCState(*this); }
 
     void
-    set(Addr val)
+    update(const PCStateBase &other) override
     {
-        Base::set(val);
-        npc(val + 4);
-    }
-
-    PCState(Addr val)
-    {
-        set(val);
+        GenericISA::SimplePCState<4>::update(other);
+        auto &pcstate = other.as<PCState>();
+        guestByteOrder = pcstate.guestByteOrder;
     }
 
     ByteOrder

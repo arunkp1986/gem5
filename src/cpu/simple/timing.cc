@@ -41,7 +41,7 @@
 
 #include "cpu/simple/timing.hh"
 
-#include "arch/locked_mem.hh"
+#include "arch/generic/decoder.hh"
 #include "base/compiler.hh"
 #include "config/the_isa.hh"
 #include "cpu/exetrace.hh"
@@ -170,7 +170,7 @@ void
 TimingSimpleCPU::switchOut()
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
-    GEM5_VAR_USED SimpleThread* thread = t_info.thread;
+    [[maybe_unused]] SimpleThread* thread = t_info.thread;
 
     // hardware transactional memory
     // Cannot switch out the CPU in the middle of a transaction
@@ -181,7 +181,7 @@ TimingSimpleCPU::switchOut()
     assert(!fetchEvent.scheduled());
     assert(_status == BaseSimpleCPU::Running || _status == Idle);
     assert(!t_info.stayAtPC);
-    assert(thread->microPC() == 0);
+    assert(thread->pcState().microPC() == 0);
 
     updateCycleCounts();
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
@@ -276,7 +276,7 @@ TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
     // We're about the issues a locked load, so tell the monitor
     // to start caring about this address
     if (pkt->isRead() && pkt->req->isLLSC()) {
-        TheISA::handleLockedRead(thread, pkt->req);
+        thread->getIsaPtr()->handleLockedRead(pkt->req);
     }
     if (req->isLocalAccess()) {
         Cycles delay = req->localAccessor(thread->getTC(), pkt);
@@ -325,7 +325,8 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         bool do_access = true;  // flag to suppress cache access
 
         if (req->isLLSC()) {
-            do_access = TheISA::handleLockedWrite(thread, req, dcachePort.cacheBlockMask);
+            do_access = thread->getIsaPtr()->handleLockedWrite(
+                    req, dcachePort.cacheBlockMask);
         } else if (req->isCondSwap()) {
             assert(res);
             req->setExtraData(*res);
@@ -456,7 +457,7 @@ TimingSimpleCPU::initiateMemRead(Addr addr, unsigned size,
     SimpleThread* thread = t_info.thread;
 
     Fault fault;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     unsigned block_size = cacheLineSize();
     BaseMMU::Mode mode = BaseMMU::Read;
 
@@ -530,7 +531,7 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
     SimpleThread* thread = t_info.thread;
 
     uint8_t *newData = new uint8_t[size];
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     unsigned block_size = cacheLineSize();
     BaseMMU::Mode mode = BaseMMU::Write;
 
@@ -594,7 +595,7 @@ TimingSimpleCPU::initiateMemAMO(Addr addr, unsigned size,
     SimpleThread* thread = t_info.thread;
 
     Fault fault;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     unsigned block_size = cacheLineSize();
     BaseMMU::Mode mode = BaseMMU::Write;
 
@@ -641,7 +642,7 @@ TimingSimpleCPU::threadSnoop(PacketPtr pkt, ThreadID sender)
             if (getCpuAddrMonitor(tid)->doMonitor(pkt)) {
                 wakeup(tid);
             }
-            TheISA::handleLockedSnoop(threadInfo[tid]->thread, pkt,
+            threadInfo[tid]->thread->getIsaPtr()->handleLockedSnoop(pkt,
                     dcachePort.cacheBlockMask);
         }
     }
@@ -693,9 +694,8 @@ TimingSimpleCPU::fetch()
     if (_status == Idle)
         return;
 
-    TheISA::PCState pcState = thread->pcState();
-    bool needToFetch = !isRomMicroPC(pcState.microPC()) &&
-                       !curMacroStaticInst;
+    MicroPC upc = thread->pcState().microPC();
+    bool needToFetch = !isRomMicroPC(upc) && !curMacroStaticInst;
 
     if (needToFetch) {
         _status = BaseSimpleCPU::Running;
@@ -726,7 +726,7 @@ TimingSimpleCPU::sendFetch(const Fault &fault, const RequestPtr &req,
         DPRINTF(SimpleCPU, "Sending fetch for addr %#x(pa: %#x)\n",
                 req->getVaddr(), req->getPaddr());
         ifetch_pkt = new Packet(req, MemCmd::ReadReq);
-        ifetch_pkt->dataStatic(decoder.moreBytesPtr());
+        ifetch_pkt->dataStatic(decoder->moreBytesPtr());
         DPRINTF(SimpleCPU, " -- pkt addr: %#x\n", ifetch_pkt->getAddr());
 
         if (!icachePort.sendTimingReq(ifetch_pkt)) {
@@ -945,7 +945,7 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     // hardware transactional memory
 
     SimpleExecContext *t_info = threadInfo[curThread];
-    GEM5_VAR_USED const bool is_htm_speculative =
+    [[maybe_unused]] const bool is_htm_speculative =
         t_info->inHtmTransactionalState();
 
     // received a response from the dcache: complete the load or store
@@ -1100,7 +1100,8 @@ TimingSimpleCPU::DcachePort::recvTimingSnoopReq(PacketPtr pkt)
     // It is not necessary to wake up the processor on all incoming packets
     if (pkt->isInvalidate() || pkt->isWrite()) {
         for (auto &t_info : cpu->threadInfo) {
-            TheISA::handleLockedSnoop(t_info->thread, pkt, cacheBlockMask);
+            t_info->thread->getIsaPtr()->handleLockedSnoop(pkt,
+                    cacheBlockMask);
         }
     }
 }
@@ -1219,7 +1220,7 @@ TimingSimpleCPU::initiateHtmCmd(Request::Flags flags)
     SimpleThread* thread = t_info.thread;
 
     const Addr addr = 0x0ul;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     const int size = 8;
 
     if (traceData)
@@ -1258,13 +1259,14 @@ TimingSimpleCPU::initiateHtmCmd(Request::Flags flags)
 }
 
 void
-TimingSimpleCPU::htmSendAbortSignal(HtmFailureFaultCause cause)
+TimingSimpleCPU::htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
+                                    HtmFailureFaultCause cause)
 {
-    SimpleExecContext& t_info = *threadInfo[curThread];
+    SimpleExecContext& t_info = *threadInfo[tid];
     SimpleThread* thread = t_info.thread;
 
     const Addr addr = 0x0ul;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     const int size = 8;
     const Request::Flags flags =
         Request::PHYSICAL|Request::STRICT_ORDER|Request::HTM_ABORT;

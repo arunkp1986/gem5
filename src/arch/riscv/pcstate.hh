@@ -42,7 +42,7 @@
 #ifndef __ARCH_RISCV_PCSTATE_HH__
 #define __ARCH_RISCV_PCSTATE_HH__
 
-#include "arch/generic/types.hh"
+#include "arch/generic/pcstate.hh"
 
 namespace gem5
 {
@@ -53,21 +53,31 @@ namespace RiscvISA
 class PCState : public GenericISA::UPCState<4>
 {
   private:
-    bool _compressed;
-    bool _rv32;
+    bool _compressed = false;
+    bool _rv32 = false;
 
   public:
-    PCState() : UPCState() { _compressed = false; _rv32 = false; }
-    PCState(Addr val) : UPCState(val) { _compressed = false; _rv32 = false; }
+    using GenericISA::UPCState<4>::UPCState;
+
+    PCStateBase *clone() const override { return new PCState(*this); }
+
+    void
+    update(const PCStateBase &other) override
+    {
+        Base::update(other);
+        auto &pcstate = other.as<PCState>();
+        _compressed = pcstate._compressed;
+        _rv32 = pcstate._rv32;
+    }
 
     void compressed(bool c) { _compressed = c; }
-    bool compressed() { return _compressed; }
+    bool compressed() const { return _compressed; }
 
     void rv32(bool val) { _rv32 = val; }
     bool rv32() const { return _rv32; }
 
     bool
-    branching() const
+    branching() const override
     {
         if (_compressed) {
             return npc() != pc() + 2 || nupc() != upc() + 1;

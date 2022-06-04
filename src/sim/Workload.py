@@ -37,6 +37,15 @@ class Workload(SimObject):
     wait_for_remote_gdb = Param.Bool(False,
         "Wait for a remote GDB connection");
 
+class StubWorkload(Workload):
+    type = 'StubWorkload'
+    cxx_header = "sim/workload.hh"
+    cxx_class = 'gem5::StubWorkload'
+
+    entry = Param.Addr(0, 'Dummy entry point for this workload.')
+    byte_order = Param.ByteOrder('little',
+            'Dummy byte order for this workload.')
+
 class KernelWorkload(Workload):
     type = 'KernelWorkload'
     cxx_header = "sim/kernel_workload.hh"
@@ -59,7 +68,7 @@ class KernelWorkload(Workload):
 class SEWorkloadMeta(type(Workload)):
     all_se_workload_classes = []
     def __new__(mcls, name, bases, dct):
-        cls = super(SEWorkloadMeta, mcls).__new__(mcls, name, bases, dct)
+        cls = super().__new__(mcls, name, bases, dct)
         SEWorkloadMeta.all_se_workload_classes.append(cls)
         return cls
 
@@ -67,6 +76,7 @@ class SEWorkload(Workload, metaclass=SEWorkloadMeta):
     type = 'SEWorkload'
     cxx_header = "sim/se_workload.hh"
     cxx_class = 'gem5::SEWorkload'
+    abstract = True
 
     @classmethod
     def _is_compatible_with(cls, obj):
@@ -92,10 +102,6 @@ class SEWorkload(Workload, metaclass=SEWorkloadMeta):
         if len(options) > 1:
             raise ValueError("More than one SE workload is compatible with %s")
         elif len(options) < 1:
-            # For now, fall back to the base class if there are no matches.
-            # After we've had a chance to implement everything, this default
-            # can be removed since this should always find exactly one match.
-            return SEWorkload(*args, **kwargs)
             raise ValueError("No SE workload is compatible with %s", path)
 
         return options[0](*args, **kwargs)

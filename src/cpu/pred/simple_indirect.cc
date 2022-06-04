@@ -93,7 +93,7 @@ SimpleIndirectPredictor::changeDirectionPrediction(ThreadID tid,
 }
 
 bool
-SimpleIndirectPredictor::lookup(Addr br_addr, TheISA::PCState& target,
+SimpleIndirectPredictor::lookup(Addr br_addr, PCStateBase& target,
     ThreadID tid)
 {
     Addr set_index = getSetIndex(br_addr, threadInfo[tid].ghr, tid);
@@ -104,9 +104,11 @@ SimpleIndirectPredictor::lookup(Addr br_addr, TheISA::PCState& target,
     DPRINTF(Indirect, "Looking up %x (set:%d)\n", br_addr, set_index);
     const auto &iset = targetCache[set_index];
     for (auto way = iset.begin(); way != iset.end(); ++way) {
-        if (way->tag == tag) {
-            DPRINTF(Indirect, "Hit %x (target:%s)\n", br_addr, way->target);
-            target = way->target;
+        // tag may be 0 and match the default in way->tag, so we also have to
+        // check that way->target has been initialized.
+        if (way->tag == tag && way->target) {
+            DPRINTF(Indirect, "Hit %x (target:%s)\n", br_addr, *way->target);
+            set(target, *way->target);
             return true;
         }
     }
@@ -177,7 +179,7 @@ SimpleIndirectPredictor::deleteIndirectInfo(ThreadID tid,
 
 void
 SimpleIndirectPredictor::recordTarget(
-    InstSeqNum seq_num, void * indirect_history, const TheISA::PCState& target,
+    InstSeqNum seq_num, void * indirect_history, const PCStateBase& target,
     ThreadID tid)
 {
     ThreadInfo &t_info = threadInfo[tid];
@@ -200,7 +202,7 @@ SimpleIndirectPredictor::recordTarget(
         if (way->tag == tag) {
             DPRINTF(Indirect, "Updating Target (seq: %d br:%x set:%d target:"
                     "%s)\n", seq_num, hist_entry.pcAddr, set_index, target);
-            way->target = target;
+            set(way->target, target);
             return;
         }
     }
@@ -210,7 +212,7 @@ SimpleIndirectPredictor::recordTarget(
     // Did not find entry, random replacement
     auto &way = iset[rand() % numWays];
     way.tag = tag;
-    way.target = target;
+    set(way.target, target);
 }
 
 

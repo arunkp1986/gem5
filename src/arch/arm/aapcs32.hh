@@ -38,6 +38,9 @@
 #include "base/intmath.hh"
 #include "cpu/thread_context.hh"
 #include "mem/port_proxy.hh"
+#include "mem/se_translating_port_proxy.hh"
+#include "mem/translating_port_proxy.hh"
+#include "sim/full_system.hh"
 #include "sim/guest_abi.hh"
 #include "sim/proxy_ptr.hh"
 
@@ -79,13 +82,14 @@ struct IsAapcs32Composite : public std::false_type {};
 
 template <typename T>
 struct IsAapcs32Composite<T, typename std::enable_if_t<
-    (std::is_array<T>::value ||
-     std::is_class<T>::value ||
-     std::is_union<T>::value) &&
+    (std::is_array_v<T> || std::is_class_v<T> || std::is_union_v<T>) &&
     // VarArgs is technically a composite type, but it's not a normal argument.
-    !IsVarArgs<T>::value
+    !IsVarArgsV<T>
     >> : public std::true_type
 {};
+
+template <typename T>
+constexpr bool IsAapcs32CompositeV = IsAapcs32Composite<T>::value;
 
 // Homogeneous Aggregates
 // These *should* be any aggregate type which has only one type of member, but
@@ -100,6 +104,10 @@ struct IsAapcs32HomogeneousAggregate : public std::false_type {};
 
 template <typename E, size_t N>
 struct IsAapcs32HomogeneousAggregate<E[N]> : public std::true_type {};
+
+template <typename T>
+constexpr bool IsAapcs32HomogeneousAggregateV =
+    IsAapcs32HomogeneousAggregate<T>::value;
 
 struct Aapcs32ArgumentBase
 {
@@ -135,12 +143,12 @@ struct Aapcs32ArgumentBase
 
 template <typename Integer>
 struct Result<Aapcs32, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) < sizeof(uint32_t))>>
+    std::is_integral_v<Integer> && (sizeof(Integer) < sizeof(uint32_t))>>
 {
     static void
     store(ThreadContext *tc, const Integer &i)
     {
-        uint32_t val = std::is_signed<Integer>::value ?
+        uint32_t val = std::is_signed_v<Integer> ?
                 sext<sizeof(Integer) * 8>(i) : i;
         tc->setIntReg(ArmISA::INTREG_R0, val);
     }
@@ -148,7 +156,7 @@ struct Result<Aapcs32, Integer, typename std::enable_if_t<
 
 template <typename Integer>
 struct Result<Aapcs32, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) == sizeof(uint32_t))>>
+    std::is_integral_v<Integer> && (sizeof(Integer) == sizeof(uint32_t))>>
 {
     static void
     store(ThreadContext *tc, const Integer &i)
@@ -159,7 +167,7 @@ struct Result<Aapcs32, Integer, typename std::enable_if_t<
 
 template <typename Integer>
 struct Result<Aapcs32, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) == sizeof(uint64_t))>>
+    std::is_integral_v<Integer> && (sizeof(Integer) == sizeof(uint64_t))>>
 {
     static void
     store(ThreadContext *tc, const Integer &i)
@@ -176,7 +184,7 @@ struct Result<Aapcs32, Integer, typename std::enable_if_t<
 
 template <typename Integer>
 struct Argument<Aapcs32, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) <= sizeof(uint32_t))
+    std::is_integral_v<Integer> && (sizeof(Integer) <= sizeof(uint32_t))
     >> : public Aapcs32ArgumentBase
 {
     static Integer
@@ -195,7 +203,7 @@ struct Argument<Aapcs32, Integer, typename std::enable_if_t<
 
 template <typename Integer>
 struct Argument<Aapcs32, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) > sizeof(uint32_t))
+    std::is_integral_v<Integer> && (sizeof(Integer) > sizeof(uint32_t))
     >> : public Aapcs32ArgumentBase
 {
     static Integer
@@ -231,7 +239,7 @@ struct Argument<Aapcs32, Integer, typename std::enable_if_t<
 
 template <typename Float>
 struct Result<Aapcs32, Float, typename std::enable_if_t<
-    std::is_floating_point<Float>::value>>
+    std::is_floating_point_v<Float>>>
 {
     static void
     store(ThreadContext *tc, const Float &f, Aapcs32::State &state)
@@ -243,7 +251,7 @@ struct Result<Aapcs32, Float, typename std::enable_if_t<
 
 template <typename Float>
 struct Argument<Aapcs32, Float, typename std::enable_if_t<
-    std::is_floating_point<Float>::value>> : public Aapcs32ArgumentBase
+    std::is_floating_point_v<Float>>> : public Aapcs32ArgumentBase
 {
     static Float
     get(ThreadContext *tc, Aapcs32::State &state)
@@ -265,7 +273,7 @@ struct Argument<Aapcs32, Float, typename std::enable_if_t<
 
 template <typename Composite>
 struct Result<Aapcs32, Composite, typename std::enable_if_t<
-    IsAapcs32Composite<Composite>::value>>
+    IsAapcs32CompositeV<Composite>>>
 {
     static void
     store(ThreadContext *tc, const Composite &composite,
@@ -293,7 +301,7 @@ struct Result<Aapcs32, Composite, typename std::enable_if_t<
 
 template <typename Composite>
 struct Argument<Aapcs32, Composite, typename std::enable_if_t<
-    IsAapcs32Composite<Composite>::value>> :
+    IsAapcs32CompositeV<Composite>>> :
     public Aapcs32ArgumentBase
 {
     static Composite
@@ -343,7 +351,9 @@ struct Argument<Aapcs32, Composite, typename std::enable_if_t<
             }
 
             if (bytes) {
-                tc->getVirtProxy().readBlob(state.nsaa, buf, bytes);
+                (FullSystem ? TranslatingPortProxy(tc) :
+                    SETranslatingPortProxy(tc)).readBlob(
+                    state.nsaa, buf, bytes);
 
                 state.stackUsed = true;
                 state.nsaa += roundUp(bytes, 4);
@@ -440,13 +450,12 @@ namespace guest_abi
 
 template <typename Integer>
 struct Result<Aapcs32Vfp, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value>> : public Result<Aapcs32, Integer>
+    std::is_integral_v<Integer>>> : public Result<Aapcs32, Integer>
 {};
 
 template <typename Integer>
 struct Argument<Aapcs32Vfp, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value>> :
-    public Argument<Aapcs32, Integer>
+    std::is_integral_v<Integer>>> : public Argument<Aapcs32, Integer>
 {};
 
 
@@ -456,7 +465,7 @@ struct Argument<Aapcs32Vfp, Integer, typename std::enable_if_t<
 
 template <typename Float>
 struct Result<Aapcs32Vfp, Float, typename std::enable_if_t<
-    std::is_floating_point<Float>::value>>
+    std::is_floating_point_v<Float>>>
 {
     static void
     store(ThreadContext *tc, const Float &f, Aapcs32Vfp::State &state)
@@ -466,16 +475,20 @@ struct Result<Aapcs32Vfp, Float, typename std::enable_if_t<
             return;
         }
 
-        RegId id(VecRegClass, 0);
-        auto reg = tc->readVecReg(id);
-        reg.as<Float>()[0] = f;
-        tc->setVecReg(id, reg);
+        auto bytes = floatToBits(f);
+        auto *vec_elems = static_cast<ArmISA::VecElem *>(&bytes);
+        constexpr int chunks = sizeof(Float) / sizeof(ArmISA::VecElem);
+        for (int chunk = 0; chunk < chunks; chunk++) {
+            int reg = chunk / ArmISA::NumVecElemPerVecReg;
+            int elem = chunk % ArmISA::NumVecElemPerVecReg;
+            tc->setVecElem(RegId(VecElemClass, reg, elem), vec_elems[chunk]);
+        }
     };
 };
 
 template <typename Float>
 struct Argument<Aapcs32Vfp, Float, typename std::enable_if_t<
-    std::is_floating_point<Float>::value>> : public Aapcs32ArgumentBase
+    std::is_floating_point_v<Float>>> : public Aapcs32ArgumentBase
 {
     static Float
     get(ThreadContext *tc, Aapcs32Vfp::State &state)
@@ -485,17 +498,20 @@ struct Argument<Aapcs32Vfp, Float, typename std::enable_if_t<
 
         const int index = state.allocate(Float{}, 1);
 
-        if (index >= 0) {
-            constexpr int lane_per_reg = 16 / sizeof(Float);
-            const int reg = index / lane_per_reg;
-            const int lane = index % lane_per_reg;
+        if (index < 0)
+            return loadFromStack<Float>(tc, state);
 
-            RegId id(VecRegClass, reg);
-            auto val = tc->readVecReg(id);
-            return val.as<Float>()[lane];
+        decltype(floatToBits(Float{})) result;
+        auto *vec_elems = static_cast<ArmISA::VecElem *>(&result);
+
+        constexpr int chunks = sizeof(Float) / sizeof(ArmISA::VecElem);
+        for (int chunk = 0; chunk < chunks; chunk++) {
+            int reg = chunk / ArmISA::NumVecElemPerVecReg;
+            int elem = chunk % ArmISA::NumVecElemPerVecReg;
+            vec_elems[chunk] = tc->readVecElem(RegId(VecElemClass, reg, elem));
         }
 
-        return loadFromStack<Float>(tc, state);
+        return bitsToFloat(result);
     }
 };
 
@@ -506,15 +522,15 @@ struct Argument<Aapcs32Vfp, Float, typename std::enable_if_t<
 
 template <typename Composite>
 struct Result<Aapcs32Vfp, Composite, typename std::enable_if_t<
-    IsAapcs32Composite<Composite>::value &&
-    !IsAapcs32HomogeneousAggregate<Composite>::value>> :
+    IsAapcs32CompositeV<Composite> &&
+    !IsAapcs32HomogeneousAggregateV<Composite>>> :
     public Result<Aapcs32, Composite>
 {};
 
 template <typename Composite>
 struct Argument<Aapcs32Vfp, Composite, typename std::enable_if_t<
-    IsAapcs32Composite<Composite>::value &&
-    !IsAapcs32HomogeneousAggregate<Composite>::value>> :
+    IsAapcs32CompositeV<Composite> &&
+    !IsAapcs32HomogeneousAggregateV<Composite>>> :
     public Argument<Aapcs32, Composite>
 {};
 
@@ -531,7 +547,7 @@ struct Aapcs32ArrayType<E[N]> { using Type = E; };
 
 template <typename HA>
 struct Argument<Aapcs32Vfp, HA, typename std::enable_if_t<
-    IsAapcs32HomogeneousAggregate<HA>::value>> :
+    IsAapcs32HomogeneousAggregateV<HA>>> :
     public Aapcs32ArgumentBase
 {
     static bool
@@ -539,7 +555,7 @@ struct Argument<Aapcs32Vfp, HA, typename std::enable_if_t<
     {
         using Elem = typename Aapcs32ArrayType<HA>::Type;
         constexpr size_t Count = sizeof(HA) / sizeof(Elem);
-        return state.variadic || !std::is_floating_point<Elem>::value ||
+        return state.variadic || !std::is_floating_point_v<Elem> ||
             Count > 4;
     }
 
@@ -581,14 +597,14 @@ struct Argument<Aapcs32Vfp, HA, typename std::enable_if_t<
 
 template <typename HA>
 struct Result<Aapcs32Vfp, HA,
-    typename std::enable_if_t<IsAapcs32HomogeneousAggregate<HA>::value>>
+    typename std::enable_if_t<IsAapcs32HomogeneousAggregateV<HA>>>
 {
     static bool
     useBaseABI(Aapcs32Vfp::State &state)
     {
         using Elem = typename Aapcs32ArrayType<HA>::Type;
         constexpr size_t Count = sizeof(HA) / sizeof(Elem);
-        return state.variadic || !std::is_floating_point<Elem>::value ||
+        return state.variadic || !std::is_floating_point_v<Elem> ||
             Count > 4;
     }
 

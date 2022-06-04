@@ -260,9 +260,6 @@ def addCommonOptions(parser):
                       Elastic Trace probe in a capture simulation and
                       Trace CPU in a replay simulation""", default="")
 
-    parser.add_argument("-l", "--lpae", action="store_true")
-    parser.add_argument("-V", "--virtualisation", action="store_true")
-
     # dist-gem5 options
     parser.add_argument("--dist", action="store_true",
                         help="Parallel distributed gem5 simulation.")
@@ -494,9 +491,6 @@ def addFSOptions(parser):
             help="Specifies device tree blob file to use with device-tree-"
             "enabled kernels")
         parser.add_argument(
-            "--enable-security-extensions", action="store_true",
-            help="Turn on the ARM Security Extensions")
-        parser.add_argument(
             "--enable-context-switch-stats-dump", action="store_true",
             help="Enable stats dump at context "
             "switches and dump tasks file (required for Streamline)")
@@ -533,3 +527,7 @@ def addFSOptions(parser):
     parser.add_argument(
         "--command-line-file", action="store", default=None, type=str,
         help="File with a template for the kernel command line")
+
+    # Debug option
+    parser.add_argument("--wait-gdb", default=False, action='store_true',
+                        help="Wait for remote GDB to connect.")

@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -34,28 +32,38 @@
 #ifndef __MEM_POOL_HH__
 #define __MEM_POOL_HH__
 
+#include <vector>
+
+#include "base/addr_range.hh"
 #include "base/types.hh"
+#include "sim/serialize.hh"
 
 namespace gem5
 {
 
-class System;
-
 /** Class for handling allocation of physical pages in SE mode. */
-class MemPool
+class MemPool : public Serializable
 {
   private:
-    System *sys;
+    Addr pageShift = 0;
 
-    /** Page number to free memory. */
-    Counter freePageNum;
+    /** Start page of pool. */
+    Counter startPageNum = 0;
+
+    /** Page number of free memory. */
+    Counter freePageNum = 0;
 
     /** The size of the pool, in number of pages. */
-    Counter _totalPages;
+    Counter _totalPages = 0;
+
+    MemPool() {}
+
+    friend class MemPools;
 
   public:
-    MemPool(System *system, Addr ptr, Addr limit);
+    MemPool(Addr page_shift, Addr ptr, Addr limit);
 
+    Counter startPage() const;
     Counter freePage() const;
     void setFreePage(Counter value);
     Addr freePageAddr() const;
@@ -64,11 +72,41 @@ class MemPool
     Counter allocatedPages() const;
     Counter freePages() const;
 
+    Addr startAddr() const;
     Addr allocatedBytes() const;
     Addr freeBytes() const;
     Addr totalBytes() const;
 
     Addr allocate(Addr npages);
+
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
+};
+
+class MemPools : public Serializable
+{
+  private:
+    Addr pageShift;
+
+    std::vector<MemPool> pools;
+
+  public:
+    MemPools(Addr page_shift) : pageShift(page_shift) {}
+
+    void populate(const AddrRangeList &memories);
+
+    /// Allocate npages contiguous unused physical pages.
+    /// @return Starting address of first page
+    Addr allocPhysPages(int npages, int pool_id=0);
+
+    /** Amount of physical memory that exists in a pool. */
+    Addr memSize(int pool_id=0) const;
+
+    /** Amount of physical memory that is still free in a pool. */
+    Addr freeMemSize(int pool_id=0) const;
+
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
 };
 
 } // namespace gem5

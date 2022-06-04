@@ -2333,38 +2333,13 @@ Gicv3CPUInterface::groupEnabled(Gicv3::GroupId group) const
 bool
 Gicv3CPUInterface::inSecureState() const
 {
-    if (!gic->getSystem()->haveSecurity()) {
-        return false;
-    }
-
-    CPSR cpsr = isa->readMiscRegNoEffect(MISCREG_CPSR);
-    SCR scr = isa->readMiscRegNoEffect(MISCREG_SCR);
-    return gem5::inSecureState(scr, cpsr);
+    return isa->inSecureState();
 }
 
-int
+ExceptionLevel
 Gicv3CPUInterface::currEL() const
 {
-    CPSR cpsr = isa->readMiscRegNoEffect(MISCREG_CPSR);
-    bool is_64 = opModeIs64((OperatingMode)(uint8_t) cpsr.mode);
-
-    if (is_64) {
-        return (ExceptionLevel)(uint8_t) cpsr.el;
-    } else {
-        switch (cpsr.mode) {
-          case MODE_USER:
-            return 0;
-
-          case MODE_HYP:
-            return 2;
-
-          case MODE_MON:
-            return 3;
-
-          default:
-            return 1;
-        }
-    }
+    return isa->currEL();
 }
 
 bool
@@ -2376,10 +2351,10 @@ Gicv3CPUInterface::haveEL(ExceptionLevel el) const
         return true;
 
       case EL2:
-        return gic->getSystem()->haveVirtualization();
+        return gic->getSystem()->has(ArmExtension::VIRTUALIZATION);
 
       case EL3:
-        return gic->getSystem()->haveSecurity();
+        return gic->getSystem()->has(ArmExtension::SECURITY);
 
       default:
         warn("Unimplemented Exception Level\n");

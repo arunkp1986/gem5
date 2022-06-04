@@ -108,8 +108,8 @@ class BaseSystem(object, metaclass=ABCMeta):
         system.toL2Bus = L2XBar(clk_domain=system.cpu_clk_domain)
         system.l2c = L2Cache(clk_domain=system.cpu_clk_domain,
                              size='4MB', assoc=8)
-        system.l2c.cpu_side = system.toL2Bus.master
-        system.l2c.mem_side = system.membus.slave
+        system.l2c.cpu_side = system.toL2Bus.mem_side_ports
+        system.l2c.mem_side = system.membus.cpu_side_ports
         return system.toL2Bus
 
     def init_cpu(self, system, cpu, sha_bus):
@@ -122,8 +122,10 @@ class BaseSystem(object, metaclass=ABCMeta):
         if not cpu.switched_out:
             self.create_caches_private(cpu)
             cpu.createInterruptController()
-            cpu.connectAllPorts(sha_bus if sha_bus != None else system.membus,
-                                system.membus)
+            cached_bus = sha_bus if sha_bus != None else system.membus
+            cpu.connectAllPorts(cached_bus.cpu_side_ports,
+                                system.membus.cpu_side_ports,
+                                system.membus.mem_side_ports)
 
     def init_kvm_cpus(self, cpus):
         """
@@ -191,7 +193,7 @@ class BaseSystem(object, metaclass=ABCMeta):
             for i, cpu in enumerate(system.cpu):
                 if not cpu.switched_out:
                     cpu.createInterruptController()
-                    cpu.connectCachedPorts(system.ruby._cpu_ports[i])
+                    cpu.connectCachedPorts(system.ruby._cpu_ports[i].in_ports)
         else:
             sha_bus = self.create_caches_shared(system)
             for cpu in system.cpu:
@@ -248,8 +250,8 @@ class BaseSESystem(BaseSystem):
                         mem_mode = self.mem_mode,
                         multi_thread = (self.num_threads > 1))
         if not self.use_ruby:
-            system.system_port = system.membus.slave
-        system.physmem.port = system.membus.master
+            system.system_port = system.membus.cpu_side_ports
+        system.physmem.port = system.membus.mem_side_ports
         self.init_system(system)
         return system
 
@@ -291,7 +293,7 @@ class BaseFSSystem(BaseSystem):
         if self.use_ruby:
             # Connect the ruby io port to the PIO bus,
             # assuming that there is just one such port.
-            system.iobus.master = system.ruby._io_port.slave
+            system.iobus.mem_side_ports = system.ruby._io_port.in_ports
         else:
             # create the memory controllers and connect them, stick with
             # the physmem name to avoid bumping all the reference stats
@@ -306,12 +308,12 @@ class BaseFSSystem(BaseSystem):
                 system.physmem = [self.mem_class(range = r)
                                   for r in system.mem_ranges]
             for i in range(len(system.physmem)):
-                system.physmem[i].port = system.membus.master
+                system.physmem[i].port = system.membus.mem_side_ports
 
             # create the iocache, which by default runs at the system clock
             system.iocache = IOCache(addr_ranges=system.mem_ranges)
-            system.iocache.cpu_side = system.iobus.master
-            system.iocache.mem_side = system.membus.slave
+            system.iocache.cpu_side = system.iobus.mem_side_ports
+            system.iocache.mem_side = system.membus.cpu_side_ports
 
     def create_root(self):
         system = self.create_system()

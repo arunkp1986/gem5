@@ -29,6 +29,7 @@
 #define __ARCH_ARM_LINUX_SE_WORKLOAD_HH__
 
 #include "arch/arm/linux/linux.hh"
+#include "arch/arm/page_size.hh"
 #include "arch/arm/regs/int.hh"
 #include "arch/arm/se_workload.hh"
 #include "params/ArmEmuLinux.hh"
@@ -45,7 +46,8 @@ class EmuLinux : public SEWorkload
   public:
     using Params = ArmEmuLinuxParams;
 
-    EmuLinux(const Params &p) : SEWorkload(p) {}
+    EmuLinux(const Params &p) : SEWorkload(p, PageShift) {}
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
 
     struct BaseSyscallABI {};
     struct SyscallABI32 : public SEWorkload::SyscallABI32,
@@ -66,15 +68,12 @@ namespace guest_abi
 
 template <typename ABI>
 struct Result<ABI, SyscallReturn,
-    typename std::enable_if_t<std::is_base_of<
-        ArmISA::EmuLinux::BaseSyscallABI, ABI>::value>>
+    typename std::enable_if_t<std::is_base_of_v<
+        ArmISA::EmuLinux::BaseSyscallABI, ABI>>>
 {
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
     {
-        if (ret.suppressed() || ret.needsRetry())
-            return;
-
         tc->setIntReg(ArmISA::ReturnValueReg, ret.encodedValue());
         if (ret.count() > 1)
             tc->setIntReg(ArmISA::SyscallPseudoReturnReg, ret.value2());

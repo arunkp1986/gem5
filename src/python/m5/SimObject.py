@@ -450,7 +450,7 @@ class MetaSimObject(type):
         if 'cxx_template_params' not in value_dict:
             value_dict['cxx_template_params'] = []
         cls_dict['_value_dict'] = value_dict
-        cls = super(MetaSimObject, mcls).__new__(mcls, name, bases, cls_dict)
+        cls = super().__new__(mcls, name, bases, cls_dict)
         if 'type' in value_dict:
             allClasses[name] = cls
         return cls
@@ -459,7 +459,7 @@ class MetaSimObject(type):
     def __init__(cls, name, bases, dict):
         # calls type.__init__()... I think that's a no-op, but leave
         # it here just in case it's not.
-        super(MetaSimObject, cls).__init__(name, bases, dict)
+        super().__init__(name, bases, dict)
 
         # initialize required attributes
 
@@ -479,6 +479,7 @@ class MetaSimObject(type):
         cls._children = multidict() # SimObject children
         cls._port_refs = multidict() # port ref objects
         cls._instantiated = False # really instantiated, cloned, or subclassed
+        cls._init_called = False # Used to check if __init__ overridden
 
         # We don't support multiple inheritance of sim objects.  If you want
         # to, you must fix multidict to deal with it properly. Non sim-objects
@@ -728,7 +729,6 @@ class MetaSimObject(type):
 
 #include "base/compiler.hh"
 #include "params/$cls.hh"
-#include "python/pybind11/core.hh"
 #include "sim/init.hh"
 #include "sim/sim_object.hh"
 
@@ -854,8 +854,8 @@ module_init(py::module_ &m_internal)
                 # constructor.
                 code('template <class CxxClass>')
                 code('class Dummy${cls}Shunt<CxxClass, std::enable_if_t<')
-                code('    std::is_constructible<CxxClass,')
-                code('        const ${cls}Params &>::value>>')
+                code('    std::is_constructible_v<CxxClass,')
+                code('        const ${cls}Params &>>>')
                 code('{')
                 code('  public:')
                 code('    using Params = ${cls}Params;')
@@ -871,8 +871,8 @@ module_init(py::module_ &m_internal)
                 # not exist.
                 code('template <class CxxClass>')
                 code('class Dummy${cls}Shunt<CxxClass, std::enable_if_t<')
-                code('    !std::is_constructible<CxxClass,')
-                code('        const ${cls}Params &>::value>>')
+                code('    !std::is_constructible_v<CxxClass,')
+                code('        const ${cls}Params &>>>')
                 code('{')
                 code('  public:')
                 code('    using Params = Dummy${cls}ParamsClass;')
@@ -889,7 +889,7 @@ module_init(py::module_ &m_internal)
                 # method, or the Dummy one. Either an implementation is
                 # mandantory since this was shunted off to the dummy class, or
                 # one is optional which will override this weak version.
-                code('GEM5_VAR_USED ${{cls.cxx_class}} *')
+                code('[[maybe_unused]] ${{cls.cxx_class}} *')
                 code('Dummy${cls}Shunt<${{cls.cxx_class}}>::Params::create() '
                      'const')
                 code('{')
@@ -1147,7 +1147,7 @@ class ParamInfo(object):
 
 class SimObjectCliWrapperException(Exception):
     def __init__(self, message):
-        super(Exception, self).__init__(message)
+        super().__init__(message)
 
 class SimObjectCliWrapper(object):
     """
@@ -1324,6 +1324,7 @@ class SimObject(object, metaclass=MetaSimObject):
         self._ccObject = None  # pointer to C++ object
         self._ccParams = None
         self._instantiated = False # really "cloned"
+        self._init_called = True # Checked so subclasses don't forget __init__
 
         # Clone children specified at class level.  No need for a
         # multidict here since we will be cloning everything.
@@ -1352,6 +1353,14 @@ class SimObject(object, metaclass=MetaSimObject):
         # apply attribute assignments from keyword args, if any
         for key,val in kwargs.items():
             setattr(self, key, val)
+
+    def _check_init(self):
+        """Utility function to check to make sure that all subclasses call
+        __init__
+        """
+        if not self._init_called:
+            raise RuntimeError(f"{str(self.__class__)} is missing a call "
+                "to super().__init__()")
 
     # "Clone" the current instance by creating another instance of
     # this instance's class, but that inherits its parameter values
@@ -1386,6 +1395,11 @@ class SimObject(object, metaclass=MetaSimObject):
         return ref
 
     def __getattr__(self, attr):
+        # Check for infinite recursion. If this SimObject hasn't been
+        # initialized with SimObject.__init__ this function will experience an
+        # infinite recursion checking for attributes that don't exist.
+        self._check_init()
+
         if attr in self._deprecated_params:
             dep_param = self._deprecated_params[attr]
             dep_param.printWarning(self._name, self.__class__.__name__)
@@ -1444,6 +1458,12 @@ class SimObject(object, metaclass=MetaSimObject):
                 e.args = (msg, )
                 raise
             self._values[attr] = value
+
+            # If we assign NULL to an attr that is a SimObject,
+            # remove the corresponding children
+            if attr in self._children and isNullPointer(value):
+                self.clear_child(attr)
+
             # implicitly parent unparented objects assigned as params
             if isSimObjectOrVector(value) and not value.has_parent():
                 self.add_child(attr, value)
@@ -1514,9 +1534,9 @@ class SimObject(object, metaclass=MetaSimObject):
     def add_child(self, name, child):
         child = coerceSimObjectOrVector(child)
         if child.has_parent():
-            warn(f"{self}.{name} already has parent (Previously declared as "
-                 f"{child._parent}.{name}), not resetting parent.\n"
+            warn(f"{self}.{name} already has parent not resetting parent.\n"
                  f"\tNote: {name} is not a parameter of {type(self).__name__}")
+            warn(f"(Previously declared as {child._parent}.{name}")
             return
         if name in self._children:
             # This code path had an undiscovered bug that would make it fail
@@ -1715,6 +1735,9 @@ class SimObject(object, metaclass=MetaSimObject):
     def getCCParams(self):
         if self._ccParams:
             return self._ccParams
+
+        # Ensure that m5.internal.params is available.
+        import m5.internal.params
 
         cc_params_struct = getattr(m5.internal.params, '%sParams' % self.type)
         cc_params = cc_params_struct()

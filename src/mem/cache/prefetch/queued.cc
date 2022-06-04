@@ -131,8 +131,11 @@ Queued::printQueue(const std::list<DeferredPacket> &queue) const
 
     for (const_iterator it = queue.cbegin(); it != queue.cend();
                                                             it++, pos++) {
-        DPRINTF(HWPrefetchQueue, "%s[%d]: Prefetch Req Addr: %#x prio: %3d\n",
-                queue_name, pos, it->pkt->getAddr(), it->priority);
+        Addr vaddr = it->pfInfo.getAddr();
+        /* Set paddr to 0 if not yet translated */
+        Addr paddr = it->pkt ? it->pkt->getAddr() : 0;
+        DPRINTF(HWPrefetchQueue, "%s[%d]: Prefetch Req VA: %#x PA: %#x "
+                "prio: %3d\n", queue_name, pos, vaddr, paddr, it->priority);
     }
 }
 
@@ -314,8 +317,8 @@ Queued::translationComplete(DeferredPacket *dp, bool failed)
                     "cache/MSHR prefetch addr:%#x\n", target_paddr);
         } else {
             Tick pf_time = curTick() + clockPeriod() * latency;
-            it->createPkt(it->translationRequest->getPaddr(), blkSize,
-                    requestorId, tagPrefetch, pf_time);
+            it->createPkt(target_paddr, blkSize, requestorId, tagPrefetch,
+                          pf_time);
             addToQueue(pfq, *it);
         }
     } else {
@@ -517,7 +520,7 @@ Queued::addToQueue(std::list<DeferredPacket> &queue,
         queue.insert(it, dpp);
     }
 
-    if (Debug::HWPrefetchQueue)
+    if (debug::HWPrefetchQueue)
         printQueue(queue);
 }
 

@@ -42,9 +42,11 @@
 #define __ARCH_ARM_INSTS_PREDINST_HH__
 
 #include "arch/arm/insts/static_inst.hh"
+#include "arch/arm/pcstate.hh"
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
+#include "cpu/thread_context.hh"
 
 namespace gem5
 {
@@ -154,7 +156,7 @@ simd_modified_imm(bool op, uint8_t cmode, uint8_t data, bool &immValid,
                 break;
             }
         }
-        GEM5_FALLTHROUGH;
+        [[fallthrough]];
       default:
         immValid = false;
         break;
@@ -391,12 +393,24 @@ class PredMicroop : public PredOp
     }
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop])
-            pcState.uEnd();
+            apc.uEnd();
         else
-            pcState.uAdvance();
+            apc.uAdvance();
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop])
+            pc.uEnd();
+        else
+            pc.uAdvance();
+        tc->pcState(pc);
     }
 };
 

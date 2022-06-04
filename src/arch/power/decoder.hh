@@ -35,6 +35,7 @@
 #include "arch/power/types.hh"
 #include "cpu/static_inst.hh"
 #include "debug/Decode.hh"
+#include "params/PowerDecoder.hh"
 
 namespace gem5
 {
@@ -48,44 +49,18 @@ class Decoder : public InstDecoder
   protected:
     // The extended machine instruction being generated
     ExtMachInst emi;
-    bool instDone;
 
   public:
-    Decoder(ISA* isa=nullptr) : InstDecoder(&emi), instDone(false) {}
-
-    void
-    process()
-    {
-    }
-
-    void
-    reset()
-    {
-        instDone = false;
-    }
+    Decoder(const PowerDecoderParams &p) : InstDecoder(p, &emi) {}
 
     // Use this to give data to the predecoder. This should be used
     // when there is control flow.
     void
-    moreBytes(const PCState &pc, Addr fetchPC)
+    moreBytes(const PCStateBase &pc, Addr fetchPC) override
     {
-        emi = gtoh(emi, pc.byteOrder());
+        emi = gtoh(emi, pc.as<PCState>().byteOrder());
         instDone = true;
     }
-
-    bool
-    needMoreBytes()
-    {
-        return true;
-    }
-
-    bool
-    instReady()
-    {
-        return instDone;
-    }
-
-    void takeOverFrom(Decoder *old) {}
 
   protected:
     /// A cache of decoded instruction objects.
@@ -108,12 +83,12 @@ class Decoder : public InstDecoder
 
   public:
     StaticInstPtr
-    decode(PowerISA::PCState &nextPC)
+    decode(PCStateBase &next_pc) override
     {
         if (!instDone)
             return NULL;
         instDone = false;
-        return decode(emi, nextPC.instAddr());
+        return decode(emi, next_pc.instAddr());
     }
 };
 

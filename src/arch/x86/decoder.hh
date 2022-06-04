@@ -44,6 +44,7 @@
 #include "cpu/decode_cache.hh"
 #include "cpu/static_inst.hh"
 #include "debug/Decoder.hh"
+#include "params/X86Decoder.hh"
 
 namespace gem5
 {
@@ -174,10 +175,6 @@ class Decoder : public InstDecoder
 
     // State machine state.
   protected:
-    // Whether or not we're out of bytes.
-    bool outOfBytes = true;
-    // Whether we've completed generating an ExtMachInst.
-    bool instDone = false;
     // The size of the displacement value.
     int displacementSize;
     // The size of the immediate value.
@@ -254,8 +251,10 @@ class Decoder : public InstDecoder
     /// @retval A pointer to the corresponding StaticInst object.
     StaticInstPtr decode(ExtMachInst mach_inst, Addr addr);
 
+    void process();
+
   public:
-    Decoder(ISA *isa=nullptr) : InstDecoder(&fetchChunk)
+    Decoder(const X86DecoderParams &p) : InstDecoder(p, &fetchChunk)
     {
         emi.reset();
         emi.mode.mode = mode;
@@ -293,27 +292,35 @@ class Decoder : public InstDecoder
     }
 
     void
-    takeOverFrom(Decoder *old)
+    takeOverFrom(InstDecoder *old) override
     {
-        mode = old->mode;
-        submode = old->submode;
+        InstDecoder::takeOverFrom(old);
+
+        Decoder *dec = dynamic_cast<Decoder *>(old);
+        assert(dec);
+
+        mode = dec->mode;
+        submode = dec->submode;
         emi.mode.mode = mode;
         emi.mode.submode = submode;
-        altOp = old->altOp;
-        defOp = old->defOp;
-        altAddr = old->altAddr;
-        defAddr = old->defAddr;
-        stack = old->stack;
+        altOp = dec->altOp;
+        defOp = dec->defOp;
+        altAddr = dec->altAddr;
+        defAddr = dec->defAddr;
+        stack = dec->stack;
     }
 
-    void reset() { state = ResetState; }
-
-    void process();
+    void
+    reset() override
+    {
+        InstDecoder::reset();
+        state = ResetState;
+    }
 
     // Use this to give data to the decoder. This should be used
     // when there is control flow.
     void
-    moreBytes(const PCState &pc, Addr fetchPC)
+    moreBytes(const PCStateBase &pc, Addr fetchPC) override
     {
         DPRINTF(Decoder, "Getting more bytes.\n");
         basePC = fetchPC;
@@ -322,9 +329,6 @@ class Decoder : public InstDecoder
         outOfBytes = false;
         process();
     }
-
-    bool needMoreBytes() { return outOfBytes; }
-    bool instReady() { return instDone; }
 
     void
     updateNPC(X86ISA::PCState &nextPC)
@@ -341,7 +345,7 @@ class Decoder : public InstDecoder
     }
 
   public:
-    StaticInstPtr decode(X86ISA::PCState &nextPC);
+    StaticInstPtr decode(PCStateBase &next_pc) override;
 
     StaticInstPtr fetchRomMicroop(
             MicroPC micropc, StaticInstPtr curMacroop) override;

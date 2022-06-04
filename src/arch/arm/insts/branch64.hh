@@ -57,8 +57,8 @@ class BranchImm64 : public ArmStaticInst
         ArmStaticInst(mnem, _machInst, __opClass), imm(_imm)
     {}
 
-    ArmISA::PCState branchTarget(
-            const ArmISA::PCState &branchPC) const override;
+    std::unique_ptr<PCStateBase> branchTarget(
+            const PCStateBase &branch_pc) const override;
 
     /// Explicitly import the otherwise hidden branchTarget
     using StaticInst::branchTarget;
@@ -134,8 +134,7 @@ class BranchRetA64 : public BranchRegReg64
 {
   public:
     BranchRetA64(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
-        BranchRegReg64(mnem, _machInst, __opClass, INTREG_X30,
-                       makeSP(INTREG_SPX))
+        BranchRegReg64(mnem, _machInst, __opClass, INTREG_X30, INTREG_SPX)
     {}
 
     std::string generateDisassembly(
@@ -162,7 +161,7 @@ class BranchEretA64 : public ArmStaticInst
 
   public:
     BranchEretA64(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
-        ArmStaticInst(mnem, _machInst, __opClass), op1(makeSP(INTREG_SPX))
+        ArmStaticInst(mnem, _machInst, __opClass), op1(INTREG_SPX)
     {}
 
     std::string generateDisassembly(
@@ -181,8 +180,8 @@ class BranchImmReg64 : public ArmStaticInst
         ArmStaticInst(mnem, _machInst, __opClass), imm(_imm), op1(_op1)
     {}
 
-    ArmISA::PCState branchTarget(
-            const ArmISA::PCState &branchPC) const override;
+    std::unique_ptr<PCStateBase> branchTarget(
+            const PCStateBase &branch_pc) const override;
 
     /// Explicitly import the otherwise hidden branchTarget
     using StaticInst::branchTarget;
@@ -207,8 +206,8 @@ class BranchImmImmReg64 : public ArmStaticInst
         imm1(_imm1), imm2(_imm2), op1(_op1)
     {}
 
-    ArmISA::PCState branchTarget(
-            const ArmISA::PCState &branchPC) const override;
+    std::unique_ptr<PCStateBase> branchTarget(
+            const PCStateBase &branch_pc) const override;
 
     /// Explicitly import the otherwise hidden branchTarget
     using StaticInst::branchTarget;

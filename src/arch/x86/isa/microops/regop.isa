@@ -50,7 +50,7 @@ def template MicroRegOpExecute {{
         %(op_decl)s;
         %(op_rd)s;
 
-        GEM5_VAR_USED RegVal result;
+        [[maybe_unused]] RegVal result;
 
         if (%(cond_check)s) {
             %(code)s;
@@ -111,8 +111,8 @@ def template MicroRegOpBranchDeclare {{
 
         Fault execute(ExecContext *, Trace::InstRecord *) const override;
 
-        X86ISA::PCState branchTarget(
-                const X86ISA::PCState &branchPC) const override;
+        std::unique_ptr<PCStateBase> branchTarget(
+                const PCStateBase &branchPC) const override;
 
         /// Explicitly import the otherwise hidden branchTarget
         using StaticInst::branchTarget;
@@ -120,15 +120,16 @@ def template MicroRegOpBranchDeclare {{
 }};
 
 def template MicroRegOpBranchTarget {{
-    X86ISA::PCState
-    %(class_name)s::branchTarget(const X86ISA::PCState &branchPC) const
+    std::unique_ptr<PCStateBase>
+    %(class_name)s::branchTarget(const PCStateBase &branch_pc) const
     {
-        X86ISA::PCState pcs = branchPC;
+        PCStateBase *pcs = branch_pc.clone();
         DPRINTF(X86, "branchTarget PC info: %s, Immediate (imm8): %lx\n",
-                pcs, (int8_t)imm8);
-        pcs.npc(pcs.npc() + (int8_t)imm8);
-        pcs.uEnd();
-        return pcs;
+                *pcs, (int8_t)imm8);
+        auto &xpc = pcs->as<PCState>();
+        xpc.npc(xpc.npc() + (int8_t)imm8);
+        xpc.uEnd();
+        return std::unique_ptr<PCStateBase>{pcs};
     }
 }};
 
@@ -279,7 +280,7 @@ let {{
                 abstract = dict['abstract']
                 del dict['abstract']
 
-            cls = super(RegOpMeta, mcls).__new__(mcls, Name, bases, dict)
+            cls = super().__new__(mcls, Name, bases, dict)
             if abstract:
                 return cls
 
@@ -392,8 +393,7 @@ let {{
 
         def __init__(self, dest, src1, src2, flags=None,
                 dataSize="env.dataSize"):
-            super(BasicRegOp, self).__init__(dest, src1, src2, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, src2, flags=flags, dataSize=dataSize)
 
     class LogicRegOp(BasicRegOp):
         abstract = True
@@ -451,15 +451,14 @@ let {{
         def __init__(self, dest, src1=None, dataSize="env.dataSize"):
             if not src1:
                 src1 = dest
-            super(RdRegOp, self).__init__(dest, src1, dataSize=dataSize)
+            super().__init__(dest, src1, dataSize=dataSize)
 
     class WrRegOp(RegOp):
         operand_types = (FoldedSrc1Op, Op2)
 
         abstract = True
         def __init__(self, src1, src2, flags=None, dataSize="env.dataSize"):
-            super(WrRegOp, self).__init__(
-                    src1, src2, flags=flags, dataSize=dataSize)
+            super().__init__(src1, src2, flags=flags, dataSize=dataSize)
 
     class Add(FlagRegOp):
         code = '''
@@ -597,7 +596,7 @@ let {{
                 dataSize="env.dataSize"):
             if not src1:
                 src1 = dest
-            super(RdRegOp, self).__init__(dest, src1, dataSize=dataSize)
+            super().__init__(dest, src1, dataSize=dataSize)
         code = 'DestReg = merge(SrcReg1, dest, ProdHi, dataSize);'
         big_code = 'DestReg = ProdHi & mask(dataSize * 8);'
 
@@ -992,7 +991,7 @@ let {{
                 CCFlagBits flags = cfofBits;
                 uint64_t top = PSrcReg1 << realShiftAmt;
                 uint64_t bottom = flags.cf << (realShiftAmt - 1);
-                if(shiftAmt > 1) {
+                if(realShiftAmt > 1) {
                     bottom |= bits(PSrcReg1, dataSize * 8 - 1,
                             dataSize * 8 - realShiftAmt + 1);
                 }
@@ -1222,8 +1221,7 @@ let {{
         operand_types = (FoldedDestOp, Imm8Op)
 
         def __init__(self, dest, imm, flags=None, dataSize="env.dataSize"):
-            super(Ruflag, self).__init__(dest, imm, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, imm, flags=flags, dataSize=dataSize)
 
     class Rflag(RegOp):
         code = '''
@@ -1248,8 +1246,7 @@ let {{
 
         operand_types = (FoldedDestOp, Imm8Op)
         def __init__(self, dest, imm, flags=None, dataSize="env.dataSize"):
-            super(Rflag, self).__init__(dest, imm, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, imm, flags=flags, dataSize=dataSize)
 
     class Sext(BasicRegOp):
         code = '''
@@ -1295,8 +1292,7 @@ let {{
     class Rddr(RegOp):
         operand_types = (FoldedDestOp, DbgSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(Rddr, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
         rdrCode = '''
             CR4 cr4 = CR4Op;
             DR7 dr7 = DR7Op;
@@ -1314,8 +1310,7 @@ let {{
     class Wrdr(RegOp):
         operand_types = (DbgDestOp, FoldedSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(Wrdr, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
         code = '''
             CR4 cr4 = CR4Op;
             DR7 dr7 = DR7Op;
@@ -1334,8 +1329,7 @@ let {{
     class Rdcr(RegOp):
         operand_types = (FoldedDestOp, CrSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(Rdcr, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
         rdcrCode = '''
             if (src1 == 1 || (src1 > 4 && src1 < 8) || (src1 > 8)) {
                 fault = std::make_shared<InvalidOpcode>();
@@ -1350,8 +1344,7 @@ let {{
     class Wrcr(RegOp):
         operand_types = (CrDestOp, FoldedSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(Wrcr, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
         code = '''
             if (dest == 1 || (dest > 4 && dest < 8) || (dest > 8)) {
                 fault = std::make_shared<InvalidOpcode>();
@@ -1400,12 +1393,11 @@ let {{
             '''
 
     # Microops for manipulating segmentation registers
-    class SegOp(CondRegOp):
+    class SegOp(RegOp):
         abstract = True
         operand_types = (SegDestOp, FoldedSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(SegOp, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
 
     class WrSegOp(SegOp):
         abstract = True
@@ -1454,8 +1446,7 @@ let {{
     class Rdval(RegOp):
         operand_types = (FoldedDestOp, MiscSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(Rdval, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
         code = '''
             DestReg = MiscRegSrc1;
         '''
@@ -1463,8 +1454,7 @@ let {{
     class Wrval(RegOp):
         operand_types = (MiscDestOp, FoldedSrc1Op)
         def __init__(self, dest, src1, flags=None, dataSize="env.dataSize"):
-            super(Wrval, self).__init__(dest, src1, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(dest, src1, flags=flags, dataSize=dataSize)
         code = '''
             MiscRegDest = SrcReg1;
         '''
@@ -1473,8 +1463,7 @@ let {{
         operand_types = (FoldedSrc1Op, FoldedSrc2Op, Imm8Op)
         def __init__(self, src1, src2, imm=0, flags=None,
                 dataSize="env.dataSize"):
-            super(Chks, self).__init__(src1, src2, imm, flags=flags,
-                    dataSize=dataSize)
+            super().__init__(src1, src2, imm, flags=flags, dataSize=dataSize)
         code = '''
             // The selector is in source 1 and can be at most 16 bits.
             SegSelector selector = SrcReg1;
@@ -1504,7 +1493,7 @@ let {{
                     fault = std::make_shared<GeneralProtection>(selector);
                     break;
                 }
-                GEM5_FALLTHROUGH;
+                [[fallthrough]];
               case SegIntGateCheck:
                 // Make sure the gate's the right type.
                 if ((m5reg.mode == LongMode && (desc.type & 0xe) != 0xe) ||
@@ -1691,7 +1680,7 @@ let {{
     class Wrxftw(RegOp):
         operand_types = (FoldedSrc1Op,)
         def __init__(self, src1, flags=None, dataSize="env.dataSize"):
-            super(Wrxftw, self).__init__(src1, flags=None, dataSize=dataSize)
+            super().__init__(src1, flags=None, dataSize=dataSize)
 
         code = '''
             FTW = X86ISA::convX87XTagsToTags(SrcReg1);

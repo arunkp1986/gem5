@@ -42,19 +42,22 @@
 
 #include <vector>
 
+#include "arch/generic/pcstate.hh"
 #include "cpu/reg_class.hh"
-#include "enums/VecRegRenameMode.hh"
+#include "mem/packet.hh"
+#include "mem/request.hh"
 #include "sim/sim_object.hh"
 
 namespace gem5
 {
 
 class ThreadContext;
+class ExecContext;
 
 class BaseISA : public SimObject
 {
   public:
-    typedef std::vector<RegClassInfo> RegClasses;
+    typedef std::vector<RegClass> RegClasses;
 
   protected:
     using SimObject::SimObject;
@@ -64,6 +67,7 @@ class BaseISA : public SimObject
     RegClasses _regClasses;
 
   public:
+    virtual PCStateBase *newPCState(Addr new_inst_addr=0) const = 0;
     virtual void takeOverFrom(ThreadContext *new_tc, ThreadContext *old_tc) {}
     virtual void setThreadContext(ThreadContext *_tc) { tc = _tc; }
 
@@ -71,19 +75,46 @@ class BaseISA : public SimObject
     virtual bool inUserMode() const = 0;
     virtual void copyRegsFrom(ThreadContext *src) = 0;
 
-    virtual enums::VecRegRenameMode
-    initVecRegRenameMode() const
-    {
-        return enums::Full;
-    }
-
-    virtual enums::VecRegRenameMode
-    vecRegRenameMode(ThreadContext *_tc) const
-    {
-        return initVecRegRenameMode();
-    }
-
     const RegClasses &regClasses() const { return _regClasses; }
+
+    // Locked memory handling functions.
+    virtual void handleLockedRead(const RequestPtr &req) {}
+    virtual void
+    handleLockedRead(ExecContext *xc, const RequestPtr &req)
+    {
+        handleLockedRead(req);
+    }
+    virtual bool
+    handleLockedWrite(const RequestPtr &req, Addr cacheBlockMask)
+    {
+        return true;
+    }
+    virtual bool
+    handleLockedWrite(ExecContext *xc, const RequestPtr &req,
+            Addr cacheBlockMask)
+    {
+        return handleLockedWrite(req, cacheBlockMask);
+    }
+
+    virtual void handleLockedSnoop(PacketPtr pkt, Addr cacheBlockMask) {}
+    virtual void
+    handleLockedSnoop(ExecContext *xc, PacketPtr pkt, Addr cacheBlockMask)
+    {
+        handleLockedSnoop(pkt, cacheBlockMask);
+    }
+    virtual void handleLockedSnoopHit() {}
+    virtual void
+    handleLockedSnoopHit(ExecContext *xc)
+    {
+        handleLockedSnoopHit();
+    }
+
+    virtual void globalClearExclusive() {}
+    virtual void
+    globalClearExclusive(ExecContext *xc)
+    {
+        globalClearExclusive();
+    }
 };
 
 } // namespace gem5

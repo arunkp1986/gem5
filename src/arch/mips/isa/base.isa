@@ -59,18 +59,31 @@ output header {{
         ExtMachInst machInst;
 
         void
-        advancePC(MipsISA::PCState &pc) const override
+        advancePC(PCStateBase &pc) const override
         {
-            pc.advance();
+            pc.as<PCState>().advance();
         }
 
-        PCState
-        buildRetPC(const PCState &curPC, const PCState &callPC) const override
+        void
+        advancePC(ThreadContext *tc) const override
         {
-            PCState ret = callPC;
+            PCState pc = tc->pcState().as<PCState>();
+            pc.advance();
+            tc->pcState(pc);
+        }
+
+        std::unique_ptr<PCStateBase>
+        buildRetPC(const PCStateBase &cur_pc,
+                const PCStateBase &call_pc) const override
+        {
+            PCStateBase *ret_pc = call_pc.clone();
+
+            auto &ret = ret_pc->as<PCState>();
+
             ret.advance();
-            ret.pc(curPC.npc());
-            return ret;
+            ret.pc(cur_pc.as<PCState>().npc());
+
+            return std::unique_ptr<PCStateBase>{ret_pc};
         }
 
         size_t

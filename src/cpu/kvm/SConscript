@@ -40,18 +40,14 @@ Import('*')
 if not env['USE_KVM'] or env['TARGET_ISA'] != env['KVM_ISA']:
     Return()
 
-SimObject('KvmVM.py')
-SimObject('BaseKvmCPU.py')
+SimObject('KvmVM.py', sim_objects=['KvmVM'])
+SimObject('BaseKvmCPU.py', sim_objects=['BaseKvmCPU'])
 
 Source('base.cc')
 Source('device.cc')
 Source('vm.cc')
 Source('perfevent.cc')
 Source('timer.cc')
-
-if env['TARGET_ISA'] == 'x86':
-    SimObject('X86KvmCPU.py')
-    Source('x86_cpu.cc')
 
 DebugFlag('Kvm', 'Basic KVM Functionality')
 DebugFlag('KvmContext', 'KVM/gem5 context synchronization')

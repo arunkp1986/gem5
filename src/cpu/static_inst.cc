@@ -30,25 +30,10 @@
 
 #include <iostream>
 
+#include "cpu/thread_context.hh"
+
 namespace gem5
 {
-
-bool
-StaticInst::hasBranchTarget(const TheISA::PCState &pc, ThreadContext *tc,
-                            TheISA::PCState &tgt) const
-{
-    if (isDirectCtrl()) {
-        tgt = branchTarget(pc);
-        return true;
-    }
-
-    if (isIndirectCtrl()) {
-        tgt = branchTarget(tc);
-        return true;
-    }
-
-    return false;
-}
 
 StaticInstPtr
 StaticInst::fetchMicroop(MicroPC upc) const
@@ -57,14 +42,14 @@ StaticInst::fetchMicroop(MicroPC upc) const
           "that is not microcoded.");
 }
 
-TheISA::PCState
-StaticInst::branchTarget(const TheISA::PCState &pc) const
+std::unique_ptr<PCStateBase>
+StaticInst::branchTarget(const PCStateBase &pc) const
 {
     panic("StaticInst::branchTarget() called on instruction "
           "that is not a PC-relative branch.");
 }
 
-TheISA::PCState
+std::unique_ptr<PCStateBase>
 StaticInst::branchTarget(ThreadContext *tc) const
 {
     panic("StaticInst::branchTarget() called on instruction "
@@ -97,6 +82,14 @@ StaticInst::printFlags(std::ostream &outs,
             printed_a_flag = true;
         }
     }
+}
+
+void
+StaticInst::advancePC(ThreadContext *tc) const
+{
+    std::unique_ptr<PCStateBase> pc(tc->pcState().clone());
+    advancePC(*pc);
+    tc->pcState(*pc);
 }
 
 } // namespace gem5

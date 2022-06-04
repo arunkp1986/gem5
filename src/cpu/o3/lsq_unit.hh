@@ -50,7 +50,6 @@
 
 #include "arch/generic/debugfaults.hh"
 #include "arch/generic/vec_reg.hh"
-#include "arch/locked_mem.hh"
 #include "base/circular_queue.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
@@ -92,16 +91,15 @@ class LSQUnit
   public:
     static constexpr auto MaxDataBytes = MaxVecRegLenInBytes;
 
-    using LSQSenderState = LSQ::LSQSenderState;
     using LSQRequest = LSQ::LSQRequest;
   private:
     class LSQEntry
     {
       private:
         /** The instruction. */
-        DynInstPtr inst;
+        DynInstPtr _inst;
         /** The request. */
-        LSQRequest* req = nullptr;
+        LSQRequest* _request = nullptr;
         /** The size of the operation. */
         uint32_t _size = 0;
         /** Valid entry. */
@@ -110,20 +108,20 @@ class LSQUnit
       public:
         ~LSQEntry()
         {
-            if (req != nullptr) {
-                req->freeLSQEntry();
-                req = nullptr;
+            if (_request != nullptr) {
+                _request->freeLSQEntry();
+                _request = nullptr;
             }
         }
 
         void
         clear()
         {
-            inst = nullptr;
-            if (req != nullptr) {
-                req->freeLSQEntry();
+            _inst = nullptr;
+            if (_request != nullptr) {
+                _request->freeLSQEntry();
             }
-            req = nullptr;
+            _request = nullptr;
             _valid = false;
             _size = 0;
         }
@@ -132,20 +130,20 @@ class LSQUnit
         set(const DynInstPtr& new_inst)
         {
             assert(!_valid);
-            inst = new_inst;
+            _inst = new_inst;
             _valid = true;
             _size = 0;
         }
 
-        LSQRequest* request() { return req; }
-        void setRequest(LSQRequest* r) { req = r; }
-        bool hasRequest() { return req != nullptr; }
+        LSQRequest* request() { return _request; }
+        void setRequest(LSQRequest* r) { _request = r; }
+        bool hasRequest() { return _request != nullptr; }
         /** Member accessors. */
         /** @{ */
         bool valid() const { return _valid; }
         uint32_t& size() { return _size; }
         const uint32_t& size() const { return _size; }
-        const DynInstPtr& instruction() const { return inst; }
+        const DynInstPtr& instruction() const { return _inst; }
         /** @} */
     };
 
@@ -302,10 +300,10 @@ class LSQUnit
     unsigned numFreeStoreEntries();
 
     /** Returns the number of loads in the LQ. */
-    int numLoads() { return loads; }
+    int numLoads() { return loadQueue.size(); }
 
     /** Returns the number of stores in the SQ. */
-    int numStores() { return stores; }
+    int numStores() { return storeQueue.size(); }
 
     // hardware transactional memory
     int numHtmStarts() const { return htmStarts; }
@@ -332,13 +330,13 @@ class LSQUnit
     bool sqFull() { return storeQueue.full(); }
 
     /** Returns if the LQ is empty. */
-    bool lqEmpty() const { return loads == 0; }
+    bool lqEmpty() const { return loadQueue.size() == 0; }
 
     /** Returns if the SQ is empty. */
-    bool sqEmpty() const { return stores == 0; }
+    bool sqEmpty() const { return storeQueue.size() == 0; }
 
     /** Returns the number of instructions in the LSQ. */
-    unsigned getCount() { return loads + stores; }
+    unsigned getCount() { return loadQueue.size() + storeQueue.size(); }
 
     /** Returns if there are any stores to writeback. */
     bool hasStoresToWB() { return storesToWB; }
@@ -406,43 +404,6 @@ class LSQUnit
     /** Pointer to the dcache port.  Used only for sending. */
     RequestPort *dcachePort;
 
-    /** Particularisation of the LSQSenderState to the LQ. */
-    class LQSenderState : public LSQSenderState
-    {
-        using LSQSenderState::alive;
-      public:
-        LQSenderState(typename LoadQueue::iterator idx_)
-            : LSQSenderState(idx_->request(), true), idx(idx_) { }
-
-        /** The LQ index of the instruction. */
-        typename LoadQueue::iterator idx;
-        //virtual LSQRequest* request() { return idx->request(); }
-        virtual void
-        complete()
-        {
-            //if (alive())
-            //  idx->request()->senderState(nullptr);
-        }
-    };
-
-    /** Particularisation of the LSQSenderState to the SQ. */
-    class SQSenderState : public LSQSenderState
-    {
-        using LSQSenderState::alive;
-      public:
-        SQSenderState(typename StoreQueue::iterator idx_)
-            : LSQSenderState(idx_->request(), false), idx(idx_) { }
-        /** The SQ index of the instruction. */
-        typename StoreQueue::iterator idx;
-        //virtual LSQRequest* request() { return idx->request(); }
-        virtual void
-        complete()
-        {
-            //if (alive())
-            //   idx->request()->senderState(nullptr);
-        }
-    };
-
     /** Writeback event, specifically for when stores forward data to loads. */
     class WritebackEvent : public Event
     {
@@ -482,7 +443,7 @@ class LSQUnit
     ThreadID lsqID;
   public:
     /** The store queue. */
-    CircularQueue<SQEntry> storeQueue;
+    StoreQueue storeQueue;
 
     /** The load queue. */
     LoadQueue loadQueue;
@@ -496,10 +457,6 @@ class LSQUnit
     /** Should loads be checked for dependency issues */
     bool checkLoads;
 
-    /** The number of load instructions in the LQ. */
-    int loads;
-    /** The number of store instructions in the SQ. */
-    int stores;
     /** The number of store instructions in the SQ waiting to writeback. */
     int storesToWB;
 
@@ -582,10 +539,10 @@ class LSQUnit
 
   public:
     /** Executes the load at the given index. */
-    Fault read(LSQRequest *req, int load_idx);
+    Fault read(LSQRequest *request, int load_idx);
 
     /** Executes the store at the given index. */
-    Fault write(LSQRequest *req, uint8_t *data, int store_idx);
+    Fault write(LSQRequest *request, uint8_t *data, int store_idx);
 
     /** Returns the index of the head load instruction. */
     int getLoadHead() { return loadQueue.head(); }
@@ -603,8 +560,6 @@ class LSQUnit
   public:
     typedef typename CircularQueue<LQEntry>::iterator LQIterator;
     typedef typename CircularQueue<SQEntry>::iterator SQIterator;
-    typedef CircularQueue<LQEntry> LQueue;
-    typedef CircularQueue<SQEntry> SQueue;
 };
 
 } // namespace o3

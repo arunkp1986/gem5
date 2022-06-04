@@ -31,7 +31,9 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <unordered_map>
 
+#include "arch/arm/fastmodel/iris/memory_spaces.hh"
 #include "arch/arm/regs/vec.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
@@ -55,6 +57,9 @@ class ThreadContext : public gem5::ThreadContext
 
     typedef std::vector<iris::ResourceId> ResourceIds;
     typedef std::map<int, std::string> IdxNameMap;
+
+    typedef std::unordered_map<Iris::CanonicalMsn, iris::MemorySpaceId>
+        MemorySpaceMap;
 
   protected:
     gem5::BaseCPU *_cpu;
@@ -81,6 +86,7 @@ class ThreadContext : public gem5::ThreadContext
             const ResourceMap &resources, const std::string &name);
     void extractResourceMap(ResourceIds &ids,
             const ResourceMap &resources, const IdxNameMap &idx_names);
+    iris::MemorySpaceId getMemorySpaceId(const Iris::CanonicalMsn& msn) const;
 
 
     ResourceIds miscRegIds;
@@ -97,9 +103,7 @@ class ThreadContext : public gem5::ThreadContext
 
     std::vector<iris::MemorySpaceInfo> memorySpaces;
     std::vector<iris::MemorySupportedAddressTranslationResult> translations;
-
-    std::unique_ptr<PortProxy> virtProxy = nullptr;
-
+    MemorySpaceMap memorySpaceIds;
 
     // A queue to keep track of instruction count based events.
     EventQueue comInstEventQueue;
@@ -165,6 +169,12 @@ class ThreadContext : public gem5::ThreadContext
     iris::IrisCppAdapter &call() const { return client.irisCall(); }
     iris::IrisCppAdapter &noThrow() const { return client.irisCallNoThrow(); }
 
+    mutable ArmISA::PCState pc;
+
+    void readMem(iris::MemorySpaceId space,
+                 Addr addr, void *p, size_t size);
+    void writeMem(iris::MemorySpaceId space,
+                  Addr addr, const void *p, size_t size);
     bool translateAddress(Addr &paddr, iris::MemorySpaceId p_space,
                           Addr vaddr, iris::MemorySpaceId v_space);
 
@@ -201,7 +211,7 @@ class ThreadContext : public gem5::ThreadContext
     }
 
     CheckerCPU *getCheckerCpuPtr() override { return nullptr; }
-    ArmISA::Decoder *
+    InstDecoder *
     getDecoderPtr() override
     {
         panic("%s not implemented.", __FUNCTION__);
@@ -214,9 +224,6 @@ class ThreadContext : public gem5::ThreadContext
     {
         return _isa;
     }
-
-    PortProxy &getVirtProxy() override { return *virtProxy; }
-    void initMemProxies(gem5::ThreadContext *tc) override;
 
     void sendFunctional(PacketPtr pkt) override;
 
@@ -287,7 +294,7 @@ class ThreadContext : public gem5::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const ArmISA::VecElem &
+    RegVal
     readVecElem(const RegId &reg) const override
     {
         panic("%s not implemented.", __FUNCTION__);
@@ -322,7 +329,7 @@ class ThreadContext : public gem5::ThreadContext
     }
 
     void
-    setVecElem(const RegId& reg, const ArmISA::VecElem& val) override
+    setVecElem(const RegId& reg, RegVal val) override
     {
         panic("%s not implemented.", __FUNCTION__);
     }
@@ -340,13 +347,10 @@ class ThreadContext : public gem5::ThreadContext
         setCCRegFlat(reg_idx, val);
     }
 
-    void pcStateNoRecord(const ArmISA::PCState &val) override { pcState(val); }
-    MicroPC microPC() const override { return 0; }
+    void pcStateNoRecord(const PCStateBase &val) override { pcState(val); }
 
-    ArmISA::PCState pcState() const override;
-    void pcState(const ArmISA::PCState &val) override;
-    Addr instAddr() const override;
-    Addr nextInstAddr() const override;
+    const PCStateBase &pcState() const override;
+    void pcState(const PCStateBase &val) override;
 
     RegVal readMiscRegNoEffect(RegIndex misc_reg) const override;
     RegVal
@@ -420,14 +424,13 @@ class ThreadContext : public gem5::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const ArmISA::VecElem&
+    RegVal
     readVecElemFlat(RegIndex idx, const ElemIndex& elemIdx) const override
     {
         panic("%s not implemented.", __FUNCTION__);
     }
     void
-    setVecElemFlat(RegIndex idx, const ElemIndex &elemIdx,
-                   const ArmISA::VecElem &val) override
+    setVecElemFlat(RegIndex idx, const ElemIndex &elemIdx, RegVal val) override
     {
         panic("%s not implemented.", __FUNCTION__);
     }

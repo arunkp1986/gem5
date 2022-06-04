@@ -76,7 +76,7 @@ GicV2::GicV2(const Params &p)
       cpuPioDelay(p.cpu_pio_delay), intLatency(p.int_latency),
       enabled(false), haveGem5Extensions(p.gem5_extensions),
       itLines(p.it_lines),
-      intEnabled {}, pendingInt {}, activeInt {},
+      intEnabled {}, pendingInt {}, activeInt {}, intGroup {},
       intPriority {}, intConfig {}, cpuTarget {},
       cpuSgiPending {}, cpuSgiActive {},
       cpuSgiPendingExt {}, cpuSgiActiveExt {},
@@ -394,7 +394,7 @@ GicV2::writeDistributor(PacketPtr pkt)
     const ContextID ctx = pkt->req->contextId();
     const size_t data_sz = pkt->getSize();
 
-    GEM5_VAR_USED uint32_t pkt_data;
+    [[maybe_unused]] uint32_t pkt_data;
     switch (data_sz)
     {
       case 1:

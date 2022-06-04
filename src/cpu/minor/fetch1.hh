@@ -139,7 +139,7 @@ class Fetch1 : public Named
         RequestPtr request;
 
         /** PC to fixup with line address */
-        TheISA::PCState pc;
+        Addr pc;
 
         /** Fill in a fault if one happens during fetch, check this by
          *  picking apart the response packet */
@@ -173,7 +173,7 @@ class Fetch1 : public Named
                     ThreadContext *tc, BaseMMU::Mode mode);
 
       public:
-        FetchRequest(Fetch1 &fetch_, InstId id_, TheISA::PCState pc_) :
+        FetchRequest(Fetch1 &fetch_, InstId id_, Addr pc_) :
             SenderState(),
             fetch(fetch_),
             state(NotIssued),
@@ -243,48 +243,43 @@ class Fetch1 : public Named
 
     struct Fetch1ThreadInfo
     {
-
-        /** Consturctor to initialize all fields. */
-        Fetch1ThreadInfo() :
-            state(FetchWaitingForPC),
-            pc(TheISA::PCState(0)),
-            streamSeqNum(InstId::firstStreamSeqNum),
-            predictionSeqNum(InstId::firstPredictionSeqNum),
-            blocked(false),
-            wakeupGuard(false)
-        { }
+        // All fields have default initializers.
+        Fetch1ThreadInfo() {}
 
         Fetch1ThreadInfo(const Fetch1ThreadInfo& other) :
             state(other.state),
-            pc(other.pc),
+            pc(other.pc->clone()),
             streamSeqNum(other.streamSeqNum),
             predictionSeqNum(other.predictionSeqNum),
             blocked(other.blocked)
         { }
 
-        FetchState state;
+        FetchState state = FetchWaitingForPC;
 
         /** Fetch PC value. This is updated by branches from Execute, branch
-         *  prediction targets from Fetch2 and by incrementing it as we fetch
-         *  lines subsequent to those two sources. */
-        TheISA::PCState pc;
+         *  prediction targets from Fetch2. This is only valid immediately
+         *  following a redirect from one of those two sources. */
+        std::unique_ptr<PCStateBase> pc;
+
+        /** The address we're currently fetching lines from. */
+        Addr fetchAddr = 0;
 
         /** Stream sequence number.  This changes on request from Execute and is
          *  used to tag instructions by the fetch stream to which they belong.
          *  Execute originates new prediction sequence numbers. */
-        InstSeqNum streamSeqNum;
+        InstSeqNum streamSeqNum = InstId::firstStreamSeqNum;
 
         /** Prediction sequence number.  This changes when requests from Execute
          *  or Fetch2 ask for a change of fetch address and is used to tag lines
          *  by the prediction to which they belong.  Fetch2 originates
          *  prediction sequence numbers. */
-        InstSeqNum predictionSeqNum;
+        InstSeqNum predictionSeqNum = InstId::firstPredictionSeqNum;
 
         /** Blocked indication for report */
-        bool blocked;
+        bool blocked = false;
 
         /** Signal to guard against sleeping first cycle of wakeup */
-        bool wakeupGuard;
+        bool wakeupGuard = false;
     };
 
     std::vector<Fetch1ThreadInfo> fetchInfo;

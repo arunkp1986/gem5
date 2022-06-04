@@ -39,11 +39,16 @@
 
 #include "arch/arm/fastmodel/iris/thread_context.hh"
 
+#include <cstdint>
+#include <cstring>
 #include <utility>
+#include <vector>
 
 #include "arch/arm/fastmodel/iris/cpu.hh"
+#include "arch/arm/fastmodel/iris/memory_spaces.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/utility.hh"
+#include "base/logging.hh"
 #include "iris/detail/IrisCppAdapter.h"
 #include "iris/detail/IrisObjects.h"
 #include "mem/se_translating_port_proxy.hh"
@@ -66,6 +71,10 @@ ThreadContext::initFromIrisInstance(const ResourceMap &resources)
     suspend();
 
     call().memory_getMemorySpaces(_instId, memorySpaces);
+    for (const auto &space: memorySpaces) {
+        memorySpaceIds.emplace(
+            Iris::CanonicalMsn(space.canonicalMsn), space.spaceId);
+    }
     call().memory_getUsefulAddressTranslations(_instId, translations);
 
     typedef ThreadContext Self;
@@ -114,6 +123,13 @@ ThreadContext::extractResourceMap(
 
         ids[idx] = extractResourceId(resources, name);
     }
+}
+
+iris::MemorySpaceId
+ThreadContext::getMemorySpaceId(const Iris::CanonicalMsn& msn) const
+{
+    auto it = memorySpaceIds.find(msn);
+    return it == memorySpaceIds.end() ? iris::IRIS_UINT64_MAX : it->second;
 }
 
 void
@@ -420,6 +436,27 @@ ThreadContext::remove(PCEvent *e)
     return true;
 }
 
+void
+ThreadContext::readMem(
+    iris::MemorySpaceId space, Addr addr, void *p, size_t size)
+{
+    iris::r0master::MemoryReadResult r;
+    auto err = call().memory_read(_instId, r, space, addr, 1, size);
+    panic_if(err != iris::r0master::E_ok, "readMem failed.");
+    std::memcpy(p, r.data.data(), size);
+}
+
+void
+ThreadContext::writeMem(
+    iris::MemorySpaceId space, Addr addr, const void *p, size_t size)
+{
+    std::vector<uint64_t> data((size + 7) / 8);
+    std::memcpy(data.data(), p, size);
+    iris::MemoryWriteResult r;
+    auto err = call().memory_write(_instId, r, space, addr, 1, size, data);
+    panic_if(err != iris::r0master::E_ok, "writeMem failed.");
+}
+
 bool
 ThreadContext::translateAddress(Addr &paddr, iris::MemorySpaceId p_space,
                                 Addr vaddr, iris::MemorySpaceId v_space)
@@ -478,23 +515,21 @@ ThreadContext::getCurrentInstCount()
 }
 
 void
-ThreadContext::initMemProxies(gem5::ThreadContext *tc)
-{
-    assert(!virtProxy);
-    if (FullSystem) {
-        virtProxy.reset(new TranslatingPortProxy(tc));
-    } else {
-        virtProxy.reset(new SETranslatingPortProxy(this,
-                        SETranslatingPortProxy::NextPage));
-    }
-}
-
-void
 ThreadContext::sendFunctional(PacketPtr pkt)
 {
-    auto *iris_cpu = dynamic_cast<Iris::BaseCPU *>(getCpuPtr());
-    assert(iris_cpu);
-    iris_cpu->evs_base_cpu->sendFunc(pkt);
+    auto msn = ArmISA::isSecure(this) ?
+        Iris::PhysicalMemorySecureMsn : Iris::PhysicalMemoryNonSecureMsn;
+    auto id = getMemorySpaceId(msn);
+
+    auto addr = pkt->getAddr();
+    auto size = pkt->getSize();
+    auto data = pkt->getPtr<uint8_t>();
+
+    pkt->makeResponse();
+    if (pkt->isRead())
+        readMem(id, addr, data, size);
+    else
+        writeMem(id, addr, data, size);
 }
 
 ThreadContext::Status
@@ -518,11 +553,10 @@ ThreadContext::setStatus(Status new_status)
     _status = new_status;
 }
 
-ArmISA::PCState
+const PCStateBase &
 ThreadContext::pcState() const
 {
     ArmISA::CPSR cpsr = readMiscRegNoEffect(ArmISA::MISCREG_CPSR);
-    ArmISA::PCState pc;
 
     pc.thumb(cpsr.t);
     pc.nextThumb(pc.thumb());
@@ -544,9 +578,9 @@ ThreadContext::pcState() const
     return pc;
 }
 void
-ThreadContext::pcState(const ArmISA::PCState &val)
+ThreadContext::pcState(const PCStateBase &val)
 {
-    Addr pc = val.pc();
+    Addr pc = val.instAddr();
 
     ArmISA::CPSR cpsr = readMiscRegNoEffect(ArmISA::MISCREG_CPSR);
     if (cpsr.width && cpsr.t)
@@ -554,18 +588,6 @@ ThreadContext::pcState(const ArmISA::PCState &val)
 
     iris::ResourceWriteResult result;
     call().resource_write(_instId, result, pcRscId, pc);
-}
-
-Addr
-ThreadContext::instAddr() const
-{
-    return pcState().instAddr();
-}
-
-Addr
-ThreadContext::nextInstAddr() const
-{
-    return pcState().nextInstAddr();
 }
 
 RegVal

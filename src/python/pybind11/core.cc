@@ -39,10 +39,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "pybind11/operators.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
-
-#include "python/pybind11/core.hh"
 
 #include <ctime>
 
@@ -85,18 +84,6 @@ PybindSimObjectResolver::resolveSimObject(const std::string &name)
 
 extern const char *compileDate;
 extern const char *gem5Version;
-
-#ifdef DEBUG
-const bool flag_DEBUG = true;
-#else
-const bool flag_DEBUG = false;
-#endif
-#ifdef NDEBUG
-const bool flag_NDEBUG = true;
-#else
-const bool flag_NDEBUG = false;
-#endif
-const bool flag_TRACING_ON = TRACING_ON;
 
 static void
 init_drain(py::module_ &m_native)
@@ -167,11 +154,9 @@ init_range(py::module_ &m_native)
         .def("mergesWith", &AddrRange::mergesWith)
         .def("intersects", &AddrRange::intersects)
         .def("isSubset", &AddrRange::isSubset)
+        .def("exclude", static_cast<AddrRangeList (AddrRange::*)(
+                    const AddrRangeList &) const>(&AddrRange::exclude))
         ;
-
-    // We need to make vectors of AddrRange opaque to avoid weird
-    // memory allocation issues in PyBind's STL wrappers.
-    py::bind_vector<std::vector<AddrRange>>(m, "AddrRangeVector");
 
     m.def("RangeEx", &RangeEx);
     m.def("RangeIn", &RangeIn);
@@ -300,10 +285,7 @@ pybind_init_core(py::module_ &m_native)
     m_core.attr("compileDate") = py::cast(compileDate);
     m_core.attr("gem5Version") = py::cast(gem5Version);
 
-    m_core.attr("flag_DEBUG") = py::cast(flag_DEBUG);
-    m_core.attr("flag_DEBUG") = py::cast(flag_DEBUG);
-    m_core.attr("flag_NDEBUG") = py::cast(flag_NDEBUG);
-    m_core.attr("flag_TRACING_ON") = py::cast(flag_TRACING_ON);
+    m_core.attr("TRACING_ON") = py::cast(TRACING_ON);
 
     m_core.attr("MaxTick") = py::cast(MaxTick);
 

@@ -783,7 +783,8 @@ Rename::skidInsert(ThreadID tid)
         warn("Skidbuffer contents:\n");
         for (it = skidBuffer[tid].begin(); it != skidBuffer[tid].end(); it++) {
             warn("[tid:%i] %s [sn:%llu].\n", tid,
-                    (*it)->staticInst->disassemble(inst->instAddr()),
+                    (*it)->staticInst->disassemble(
+                        inst->pcState().instAddr()),
                     (*it)->seqNum);
         }
         panic("Skidbuffer Exceeded Max Size");
@@ -955,9 +956,6 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
 
         ++stats.undoneMaps;
     }
-
-    // Check if we need to change vector renaming mode after squashing
-    cpu->switchRenameMode(tid, freeList);
 }
 
 void
@@ -1092,7 +1090,7 @@ Rename::renameDestRegs(const DynInstPtr &inst, ThreadID tid)
 
         rename_result = map->rename(flat_dest_regid);
 
-        inst->regs.flattenedDestIdx(dest_idx, flat_dest_regid);
+        inst->flattenedDestIdx(dest_idx, flat_dest_regid);
 
         scoreboard->unsetReg(rename_result.first);
 
@@ -1250,7 +1248,7 @@ Rename::readFreeEntries(ThreadID tid)
     }
 
     DPRINTF(Rename, "[tid:%i] Free IQ: %i, Free ROB: %i, "
-                    "Free LQ: %i, Free SQ: %i, FreeRM %i(%i %i %i %i %i)\n",
+                    "Free LQ: %i, Free SQ: %i, FreeRM %i(%i %i %i %i %i %i)\n",
             tid,
             freeEntries[tid].iqEntries,
             freeEntries[tid].robEntries,
@@ -1260,6 +1258,7 @@ Rename::readFreeEntries(ThreadID tid)
             renameMap[tid]->numFreeIntEntries(),
             renameMap[tid]->numFreeFloatEntries(),
             renameMap[tid]->numFreeVecEntries(),
+            renameMap[tid]->numFreeVecElemEntries(),
             renameMap[tid]->numFreePredEntries(),
             renameMap[tid]->numFreeCCEntries());
 

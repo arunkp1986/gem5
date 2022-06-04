@@ -39,7 +39,6 @@
 
 #include <functional>
 
-#include "arch/locked_mem.hh"
 #include "cpu/minor/cpu.hh"
 #include "cpu/minor/exec_context.hh"
 #include "cpu/minor/fetch1.hh"
@@ -225,8 +224,8 @@ void
 Execute::tryToBranch(MinorDynInstPtr inst, Fault fault, BranchData &branch)
 {
     ThreadContext *thread = cpu.getContext(inst->id.threadId);
-    const TheISA::PCState &pc_before = inst->pc;
-    TheISA::PCState target = thread->pcState();
+    const std::unique_ptr<PCStateBase> pc_before(inst->pc->clone());
+    std::unique_ptr<PCStateBase> target(thread->pcState().clone());
 
     /* Force a branch for SerializeAfter/SquashAfter instructions
      * at the end of micro-op sequence when we're not suspended */
@@ -237,10 +236,10 @@ Execute::tryToBranch(MinorDynInstPtr inst, Fault fault, BranchData &branch)
          inst->staticInst->isSquashAfter());
 
     DPRINTF(Branch, "tryToBranch before: %s after: %s%s\n",
-        pc_before, target, (force_branch ? " (forcing)" : ""));
+        *pc_before, *target, (force_branch ? " (forcing)" : ""));
 
     /* Will we change the PC to something other than the next instruction? */
-    bool must_branch = pc_before != target ||
+    bool must_branch = *pc_before != *target ||
         fault != NoFault ||
         force_branch;
 
@@ -248,11 +247,11 @@ Execute::tryToBranch(MinorDynInstPtr inst, Fault fault, BranchData &branch)
     BranchData::Reason reason = BranchData::NoBranch;
 
     if (fault == NoFault) {
-        inst->staticInst->advancePC(target);
-        thread->pcState(target);
+        inst->staticInst->advancePC(*target);
+        thread->pcState(*target);
 
         DPRINTF(Branch, "Advancing current PC from: %s to: %s\n",
-            pc_before, target);
+            *pc_before, *target);
     }
 
     if (inst->predictedTaken && !force_branch) {
@@ -262,32 +261,34 @@ Execute::tryToBranch(MinorDynInstPtr inst, Fault fault, BranchData &branch)
              *  intended PC value */
             DPRINTF(Branch, "Predicted a branch from 0x%x to 0x%x but"
                 " none happened inst: %s\n",
-                inst->pc.instAddr(), inst->predictedTarget.instAddr(), *inst);
+                inst->pc->instAddr(), inst->predictedTarget->instAddr(),
+                *inst);
 
             reason = BranchData::BadlyPredictedBranch;
-        } else if (inst->predictedTarget == target) {
+        } else if (*inst->predictedTarget == *target) {
             /* Branch prediction got the right target, kill the branch and
              *  carry on.
              *  Note that this information to the branch predictor might get
              *  overwritten by a "real" branch during this cycle */
             DPRINTF(Branch, "Predicted a branch from 0x%x to 0x%x correctly"
                 " inst: %s\n",
-                inst->pc.instAddr(), inst->predictedTarget.instAddr(), *inst);
+                inst->pc->instAddr(), inst->predictedTarget->instAddr(),
+                *inst);
 
             reason = BranchData::CorrectlyPredictedBranch;
         } else {
             /* Branch prediction got the wrong target */
             DPRINTF(Branch, "Predicted a branch from 0x%x to 0x%x"
                     " but got the wrong target (actual: 0x%x) inst: %s\n",
-                    inst->pc.instAddr(), inst->predictedTarget.instAddr(),
-                    target.instAddr(), *inst);
+                    inst->pc->instAddr(), inst->predictedTarget->instAddr(),
+                    target->instAddr(), *inst);
 
             reason = BranchData::BadlyPredictedBranchTarget;
         }
     } else if (must_branch) {
         /* Unpredicted branch */
         DPRINTF(Branch, "Unpredicted branch from 0x%x to 0x%x inst: %s\n",
-            inst->pc.instAddr(), target.instAddr(), *inst);
+            inst->pc->instAddr(), target->instAddr(), *inst);
 
         reason = BranchData::UnpredictedBranch;
     } else {
@@ -295,14 +296,14 @@ Execute::tryToBranch(MinorDynInstPtr inst, Fault fault, BranchData &branch)
         reason = BranchData::NoBranch;
     }
 
-    updateBranchData(inst->id.threadId, reason, inst, target, branch);
+    updateBranchData(inst->id.threadId, reason, inst, *target, branch);
 }
 
 void
 Execute::updateBranchData(
     ThreadID tid,
     BranchData::Reason reason,
-    MinorDynInstPtr inst, const TheISA::PCState &target,
+    MinorDynInstPtr inst, const PCStateBase &target,
     BranchData &branch)
 {
     if (reason != BranchData::NoBranch) {
@@ -464,7 +465,7 @@ Execute::executeMemRefInst(MinorDynInstPtr inst, BranchData &branch,
         issued = false;
     } else {
         ThreadContext *thread = cpu.getContext(inst->id.threadId);
-        TheISA::PCState old_pc = thread->pcState();
+        std::unique_ptr<PCStateBase> old_pc(thread->pcState().clone());
 
         ExecContext context(cpu, *cpu.threads[inst->id.threadId],
             *this, inst, zeroReg);
@@ -516,7 +517,7 @@ Execute::executeMemRefInst(MinorDynInstPtr inst, BranchData &branch,
         }
 
         /* Restore thread PC */
-        thread->pcState(old_pc);
+        thread->pcState(*old_pc);
         issued = true;
     }
 
@@ -850,10 +851,10 @@ Execute::tryPCEvents(ThreadID thread_id)
     /* Handle PC events on instructions */
     Addr oldPC;
     do {
-        oldPC = thread->instAddr();
+        oldPC = thread->pcState().instAddr();
         cpu.threads[thread_id]->pcEventQueue.service(oldPC, thread);
         num_pc_event_checks++;
-    } while (oldPC != thread->instAddr());
+    } while (oldPC != thread->pcState().instAddr());
 
     if (num_pc_event_checks > 1) {
         DPRINTF(PCEvent, "Acting on PC Event to PC: %s\n",
@@ -891,7 +892,7 @@ Execute::doInstCommitAccounting(MinorDynInstPtr inst)
     if (inst->traceData)
         inst->traceData->setCPSeq(thread->numOp);
 
-    cpu.probeInstCommit(inst->staticInst, inst->pc.instAddr());
+    cpu.probeInstCommit(inst->staticInst, inst->pc->instAddr());
 }
 
 bool
@@ -1021,7 +1022,7 @@ Execute::commitInst(MinorDynInstPtr inst, bool early_memory_issue,
             !isInterrupted(thread_id)) /* Don't suspend if we have
                 interrupts */
         {
-            TheISA::PCState resume_pc = cpu.getContext(thread_id)->pcState();
+            auto &resume_pc = cpu.getContext(thread_id)->pcState();
 
             assert(resume_pc.microPC() == 0);
 
@@ -1494,7 +1495,8 @@ Execute::evaluate()
              *  the bag */
             if (commit_info.drainState == DrainHaltFetch) {
                 updateBranchData(commit_tid, BranchData::HaltFetch,
-                        MinorDynInst::bubble(), TheISA::PCState(0), branch);
+                        MinorDynInst::bubble(),
+                        cpu.getContext(commit_tid)->pcState(), branch);
 
                 cpu.wakeupOnEvent(Pipeline::ExecuteStageId);
                 setDrainState(commit_tid, DrainAllInsts);

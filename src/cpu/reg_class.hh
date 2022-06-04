@@ -43,6 +43,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <string>
 
 #include "arch/vecregs.hh"
 #include "base/types.hh"
@@ -52,7 +53,7 @@ namespace gem5
 {
 
 /** Enumerate the classes of registers. */
-enum RegClass
+enum RegClassType
 {
     IntRegClass,        ///< Integer register
     FloatRegClass,      ///< Floating-point register
@@ -65,19 +66,43 @@ enum RegClass
     MiscRegClass        ///< Control (misc) register
 };
 
-class RegClassInfo
+class RegId;
+
+class RegClassOps
+{
+  public:
+    virtual std::string regName(const RegId &id) const = 0;
+};
+
+class DefaultRegClassOps : public RegClassOps
+{
+  public:
+    std::string regName(const RegId &id) const override;
+};
+
+class RegClass
 {
   private:
     size_t _size;
     const RegIndex _zeroReg;
 
+    static inline DefaultRegClassOps defaultOps;
+    RegClassOps *_ops = &defaultOps;
+
   public:
-    RegClassInfo(size_t new_size, RegIndex new_zero = -1) :
+    RegClass(size_t new_size, RegIndex new_zero=-1) :
         _size(new_size), _zeroReg(new_zero)
     {}
+    RegClass(size_t new_size, RegClassOps &new_ops, RegIndex new_zero=-1) :
+        RegClass(new_size, new_zero)
+    {
+        _ops = &new_ops;
+    }
 
     size_t size() const { return _size; }
     RegIndex zeroReg() const { return _zeroReg; }
+
+    std::string regName(const RegId &id) const { return _ops->regName(id); }
 };
 
 /** Register ID: describe an architectural register with its class and index.
@@ -89,7 +114,7 @@ class RegId
 {
   protected:
     static const char* regClassStrings[];
-    RegClass regClass;
+    RegClassType regClass;
     RegIndex regIdx;
     ElemIndex elemIdx;
     static constexpr size_t Scale = TheISA::NumVecElemPerVecReg;
@@ -100,10 +125,11 @@ class RegId
   public:
     RegId() : RegId(IntRegClass, 0) {}
 
-    RegId(RegClass reg_class, RegIndex reg_idx)
+    RegId(RegClassType reg_class, RegIndex reg_idx)
         : RegId(reg_class, reg_idx, IllegalElemIndex) {}
 
-    explicit RegId(RegClass reg_class, RegIndex reg_idx, ElemIndex elem_idx)
+    explicit RegId(RegClassType reg_class, RegIndex reg_idx,
+            ElemIndex elem_idx)
         : regClass(reg_class), regIdx(reg_idx), elemIdx(elem_idx),
           numPinnedWrites(0)
     {
@@ -147,7 +173,7 @@ class RegId
     }
 
     /** @return true if it is of the specified class. */
-    bool is(RegClass reg_class) const { return regClass == reg_class; }
+    bool is(RegClassType reg_class) const { return regClass == reg_class; }
 
     /** Index accessors */
     /** @{ */
@@ -177,7 +203,7 @@ class RegId
     /** Elem accessor */
     RegIndex elemIndex() const { return elemIdx; }
     /** Class accessor */
-    RegClass classValue() const { return regClass; }
+    RegClassType classValue() const { return regClass; }
     /** Return a const char* with the register class name. */
     const char* className() const { return regClassStrings[regClass]; }
 
@@ -208,14 +234,14 @@ class PhysRegId : private RegId
     {}
 
     /** Scalar PhysRegId constructor. */
-    explicit PhysRegId(RegClass _regClass, RegIndex _regIdx,
+    explicit PhysRegId(RegClassType _regClass, RegIndex _regIdx,
               RegIndex _flatIdx)
         : RegId(_regClass, _regIdx), flatIdx(_flatIdx),
           numPinnedWritesToComplete(0), pinned(false)
     {}
 
     /** Vector PhysRegId constructor (w/ elemIndex). */
-    explicit PhysRegId(RegClass _regClass, RegIndex _regIdx,
+    explicit PhysRegId(RegClassType _regClass, RegIndex _regIdx,
               ElemIndex elem_idx, RegIndex flat_idx)
         : RegId(_regClass, _regIdx, elem_idx), flatIdx(flat_idx),
           numPinnedWritesToComplete(0), pinned(false)

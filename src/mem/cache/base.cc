@@ -295,7 +295,7 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
                 // delay of the xbar.
                 mshr->allocateTarget(pkt, forward_time, order++,
                                      allocOnFill(pkt->cmd));
-                if (mshr->getNumTargets() == numTarget) {
+                if (mshr->getNumTargets() >= numTarget) {
                     noTargetMSHR = mshr;
                     setBlocked(Blocked_NoTargets);
                     // need to be careful with this... if this mshr isn't
@@ -917,7 +917,8 @@ BaseCache::updateCompressionData(CacheBlk *&blk, const uint64_t* data,
 
     // Get previous compressed size
     CompressionBlk* compression_blk = static_cast<CompressionBlk*>(blk);
-    GEM5_VAR_USED const std::size_t prev_size = compression_blk->getSizeBits();
+    [[maybe_unused]] const std::size_t prev_size =
+        compression_blk->getSizeBits();
 
     // If compressed size didn't change enough to modify its co-allocatability
     // there is nothing to do. Otherwise we may be facing a data expansion
@@ -1156,9 +1157,9 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
     // sanity check
     assert(pkt->isRequest());
 
-    chatty_assert(!(isReadOnly && pkt->isWrite()),
-                  "Should never see a write in a read-only cache %s\n",
-                  name());
+    gem5_assert(!(isReadOnly && pkt->isWrite()),
+                "Should never see a write in a read-only cache %s\n",
+                name());
 
     // Access block in the tags
     Cycles tag_latency(0);
@@ -1438,7 +1439,7 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
     Addr addr = pkt->getAddr();
     bool is_secure = pkt->isSecure();
     const bool has_old_data = blk && blk->isValid();
-    const std::string old_state = blk ? blk->print() : "";
+    const std::string old_state = (debug::Cache && blk) ? blk->print() : "";
 
     // When handling a fill, we should have no writes to this line.
     assert(addr == pkt->getBlockAddr(blkSize));
@@ -1501,8 +1502,8 @@ BaseCache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
             // owners copy
             blk->setCoherenceBits(CacheBlk::DirtyBit);
 
-            chatty_assert(!isReadOnly, "Should never see dirty snoop response "
-                          "in read-only cache %s\n", name());
+            gem5_assert(!isReadOnly, "Should never see dirty snoop response "
+                        "in read-only cache %s\n", name());
 
         }
     }
@@ -1615,8 +1616,8 @@ BaseCache::evictBlock(CacheBlk *blk, PacketList &writebacks)
 PacketPtr
 BaseCache::writebackBlk(CacheBlk *blk)
 {
-    chatty_assert(!isReadOnly || writebackClean,
-                  "Writeback from read-only cache");
+    gem5_assert(!isReadOnly || writebackClean,
+                "Writeback from read-only cache");
     assert(blk && blk->isValid() &&
         (blk->isSet(CacheBlk::DirtyBit) || writebackClean));
 
@@ -1953,6 +1954,8 @@ BaseCache::CacheCmdStats::CacheCmdStats(BaseCache &c,
                ("number of " + name + " hits").c_str()),
       ADD_STAT(misses, statistics::units::Count::get(),
                ("number of " + name + " misses").c_str()),
+      ADD_STAT(hitLatency, statistics::units::Tick::get(),
+               ("number of " + name + " hit ticks").c_str()),
       ADD_STAT(missLatency, statistics::units::Tick::get(),
                ("number of " + name + " miss ticks").c_str()),
       ADD_STAT(accesses, statistics::units::Count::get(),
@@ -2007,6 +2010,15 @@ BaseCache::CacheCmdStats::regStatsFromParent()
         ;
     for (int i = 0; i < max_requestors; i++) {
         misses.subname(i, system->getRequestorName(i));
+    }
+
+    // Hit latency statistics
+    hitLatency
+        .init(max_requestors)
+        .flags(total | nozero | nonan)
+        ;
+    for (int i = 0; i < max_requestors; i++) {
+        hitLatency.subname(i, system->getRequestorName(i));
     }
 
     // Miss latency statistics
@@ -2115,6 +2127,10 @@ BaseCache::CacheStats::CacheStats(BaseCache &c)
              "number of demand (read+write) hits"),
     ADD_STAT(overallHits, statistics::units::Count::get(),
              "number of overall hits"),
+    ADD_STAT(demandHitLatency, statistics::units::Tick::get(),
+             "number of demand (read+write) hit ticks"),
+    ADD_STAT(overallHitLatency, statistics::units::Tick::get(),
+            "number of overall hit ticks"),
     ADD_STAT(demandMisses, statistics::units::Count::get(),
              "number of demand (read+write) misses"),
     ADD_STAT(overallMisses, statistics::units::Count::get(),
@@ -2247,6 +2263,17 @@ BaseCache::CacheStats::regStats()
     overallMissLatency = demandMissLatency + SUM_NON_DEMAND(missLatency);
     for (int i = 0; i < max_requestors; i++) {
         overallMissLatency.subname(i, system->getRequestorName(i));
+    }
+
+    demandHitLatency.flags(total | nozero | nonan);
+    demandHitLatency = SUM_DEMAND(hitLatency);
+    for (int i = 0; i < max_requestors; i++) {
+        demandHitLatency.subname(i, system->getRequestorName(i));
+    }
+    overallHitLatency.flags(total | nozero | nonan);
+    overallHitLatency = demandHitLatency + SUM_NON_DEMAND(hitLatency);
+    for (int i = 0; i < max_requestors; i++) {
+        overallHitLatency.subname(i, system->getRequestorName(i));
     }
 
     demandAccesses.flags(total | nozero | nonan);
@@ -2453,7 +2480,7 @@ BaseCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
     if (cache->system->bypassCaches()) {
         // Just forward the packet if caches are disabled.
         // @todo This should really enqueue the packet rather
-        GEM5_VAR_USED bool success = cache->memSidePort.sendTimingReq(pkt);
+        [[maybe_unused]] bool success = cache->memSidePort.sendTimingReq(pkt);
         assert(success);
         return true;
     } else if (tryTiming(pkt)) {

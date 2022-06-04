@@ -45,12 +45,11 @@
 #include <algorithm>
 #include <vector>
 
-#include "arch/decoder.hh"
 #include "arch/generic/htm.hh"
 #include "arch/generic/mmu.hh"
+#include "arch/generic/pcstate.hh"
 #include "arch/generic/tlb.hh"
 #include "arch/isa.hh"
-#include "arch/pcstate.hh"
 #include "arch/vecregs.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
@@ -100,11 +99,12 @@ class SimpleThread : public ThreadState, public ThreadContext
     std::vector<RegVal> floatRegs;
     std::vector<RegVal> intRegs;
     std::vector<TheISA::VecRegContainer> vecRegs;
+    std::vector<RegVal> vecElemRegs;
     std::vector<TheISA::VecPredRegContainer> vecPredRegs;
     std::vector<RegVal> ccRegs;
     TheISA::ISA *const isa;    // one "instance" of the current ISA.
 
-    TheISA::PCState _pcState;
+    std::unique_ptr<PCStateBase> _pcState;
 
     // hardware transactional memory
     std::unique_ptr<BaseHTMCheckpoint> _htmCheckpoint;
@@ -133,7 +133,7 @@ class SimpleThread : public ThreadState, public ThreadContext
 
     BaseMMU *mmu;
 
-    TheISA::Decoder decoder;
+    InstDecoder *decoder;
 
     // hardware transactional memory
     int64_t htmTransactionStarts;
@@ -142,11 +142,11 @@ class SimpleThread : public ThreadState, public ThreadContext
     // constructor: initialize SimpleThread from given process structure
     // FS
     SimpleThread(BaseCPU *_cpu, int _thread_num, System *_system,
-                 BaseMMU *_mmu, BaseISA *_isa);
+                 BaseMMU *_mmu, BaseISA *_isa, InstDecoder *_decoder);
     // SE
     SimpleThread(BaseCPU *_cpu, int _thread_num, System *_system,
                  Process *_process, BaseMMU *_mmu,
-                 BaseISA *_isa);
+                 BaseISA *_isa, InstDecoder *_decoder);
 
     virtual ~SimpleThread() {}
 
@@ -212,17 +212,9 @@ class SimpleThread : public ThreadState, public ThreadContext
 
     BaseISA *getIsaPtr() override { return isa; }
 
-    TheISA::Decoder *getDecoderPtr() override { return &decoder; }
+    InstDecoder *getDecoderPtr() override { return decoder; }
 
     System *getSystemPtr() override { return system; }
-
-    PortProxy &getVirtProxy() override { return ThreadState::getVirtProxy(); }
-
-    void
-    initMemProxies(ThreadContext *tc) override
-    {
-        ThreadState::initMemProxies(tc);
-    }
 
     Process *getProcessPtr() override { return ThreadState::getProcessPtr(); }
     void setProcessPtr(Process *p) override { ThreadState::setProcessPtr(p); }
@@ -256,11 +248,12 @@ class SimpleThread : public ThreadState, public ThreadContext
     void
     clearArchRegs() override
     {
-        _pcState = 0;
+        set(_pcState, isa->newPCState());
         std::fill(intRegs.begin(), intRegs.end(), 0);
         std::fill(floatRegs.begin(), floatRegs.end(), 0);
         for (auto &vec_reg: vecRegs)
             vec_reg.zero();
+        std::fill(vecElemRegs.begin(), vecElemRegs.end(), 0);
         for (auto &pred_reg: vecPredRegs)
             pred_reg.reset();
         std::fill(ccRegs.begin(), ccRegs.end(), 0);
@@ -314,13 +307,12 @@ class SimpleThread : public ThreadState, public ThreadContext
         return regVal;
     }
 
-    const TheISA::VecElem &
+    RegVal
     readVecElem(const RegId &reg) const override
     {
         int flatIndex = isa->flattenVecElemIndex(reg.index());
         assert(flatIndex < vecRegs.size());
-        const TheISA::VecElem& regVal =
-            readVecElemFlat(flatIndex, reg.elemIndex());
+        RegVal regVal = readVecElemFlat(flatIndex, reg.elemIndex());
         DPRINTF(VecRegs, "Reading element %d of vector reg %d (%d) as"
                 " %#x.\n", reg.elemIndex(), reg.index(), flatIndex, regVal);
         return regVal;
@@ -397,7 +389,7 @@ class SimpleThread : public ThreadState, public ThreadContext
     }
 
     void
-    setVecElem(const RegId &reg, const TheISA::VecElem &val) override
+    setVecElem(const RegId &reg, RegVal val) override
     {
         int flatIndex = isa->flattenVecElemIndex(reg.index());
         assert(flatIndex < vecRegs.size());
@@ -427,18 +419,15 @@ class SimpleThread : public ThreadState, public ThreadContext
         setCCRegFlat(flatIndex, val);
     }
 
-    TheISA::PCState pcState() const override { return _pcState; }
-    void pcState(const TheISA::PCState &val) override { _pcState = val; }
+    const PCStateBase &pcState() const override { return *_pcState; }
+    void pcState(const PCStateBase &val) override { set(_pcState, val); }
 
     void
-    pcStateNoRecord(const TheISA::PCState &val) override
+    pcStateNoRecord(const PCStateBase &val) override
     {
-        _pcState = val;
+        set(_pcState, val);
     }
 
-    Addr instAddr() const override  { return _pcState.instAddr(); }
-    Addr nextInstAddr() const override { return _pcState.nextInstAddr(); }
-    MicroPC microPC() const override { return _pcState.microPC(); }
     bool readPredicate() const { return predicate; }
     void setPredicate(bool val) { predicate = val; }
 
@@ -528,17 +517,17 @@ class SimpleThread : public ThreadState, public ThreadContext
         vecRegs[reg] = val;
     }
 
-    const TheISA::VecElem &
+    RegVal
     readVecElemFlat(RegIndex reg, const ElemIndex &elemIndex) const override
     {
-        return vecRegs[reg].as<TheISA::VecElem>()[elemIndex];
+        return vecElemRegs[reg * TheISA::NumVecElemPerVecReg + elemIndex];
     }
 
     void
     setVecElemFlat(RegIndex reg, const ElemIndex &elemIndex,
-                   const TheISA::VecElem &val) override
+                   RegVal val) override
     {
-        vecRegs[reg].as<TheISA::VecElem>()[elemIndex] = val;
+        vecElemRegs[reg * TheISA::NumVecElemPerVecReg + elemIndex] = val;
     }
 
     const TheISA::VecPredRegContainer &

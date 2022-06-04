@@ -1,8 +1,6 @@
 # Copyright (c) 2011-2015 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -136,7 +134,7 @@ def config_tlb_hierarchy(options, system, shader_idx):
 
     #===========================================================
     # Specify the TLB hierarchy (i.e., port connections)
-    # All TLBs but the last level TLB need to have a memSidePort (master)
+    # All TLBs but the last level TLB need to have a memSidePort
     #===========================================================
 
     # Each TLB is connected with its Coalescer through a single port.
@@ -148,11 +146,11 @@ def config_tlb_hierarchy(options, system, shader_idx):
         for TLB_type in hierarchy_level:
             name = TLB_type['name']
             for index in range(TLB_type['width']):
-                exec('system.%s_coalescer[%d].master[0] = \
-                        system.%s_tlb[%d].slave[0]' % \
+                exec('system.%s_coalescer[%d].mem_side_ports[0] = \
+                        system.%s_tlb[%d].cpu_side_ports[0]' % \
                         (name, index, name, index))
 
-    # Connect the cpuSidePort (slave) of all the coalescers in level 1
+    # Connect the cpuSidePort of all the coalescers in level 1
     # < Modify here if you want a different configuration >
     for TLB_type in L1:
         name = TLB_type['name']
@@ -163,12 +161,12 @@ def config_tlb_hierarchy(options, system, shader_idx):
                 if tlb_per_cu:
                     for tlb in range(tlb_per_cu):
                         exec('system.cpu[%d].CUs[%d].translation_port[%d] = \
-                                system.l1_coalescer[%d].slave[%d]' % \
+                                system.l1_coalescer[%d].cpu_side_ports[%d]' % \
                                 (shader_idx, cu_idx, tlb,
                                     cu_idx*tlb_per_cu+tlb, 0))
                 else:
                     exec('system.cpu[%d].CUs[%d].translation_port[%d] = \
-                            system.l1_coalescer[%d].slave[%d]' % \
+                            system.l1_coalescer[%d].cpu_side_ports[%d]' % \
                             (shader_idx, cu_idx, tlb_per_cu,
                                 cu_idx / (n_cu / num_TLBs),
                                 cu_idx % (n_cu / num_TLBs)))
@@ -177,30 +175,31 @@ def config_tlb_hierarchy(options, system, shader_idx):
                 sqc_tlb_index = index / options.cu_per_sqc
                 sqc_tlb_port_id = index % options.cu_per_sqc
                 exec('system.cpu[%d].CUs[%d].sqc_tlb_port = \
-                        system.sqc_coalescer[%d].slave[%d]' % \
+                        system.sqc_coalescer[%d].cpu_side_ports[%d]' % \
                         (shader_idx, index, sqc_tlb_index, sqc_tlb_port_id))
         elif name == 'scalar': # Scalar D-TLB
             for index in range(n_cu):
                 scalar_tlb_index = index / options.cu_per_scalar_cache
                 scalar_tlb_port_id = index % options.cu_per_scalar_cache
                 exec('system.cpu[%d].CUs[%d].scalar_tlb_port = \
-                        system.scalar_coalescer[%d].slave[%d]' % \
+                        system.scalar_coalescer[%d].cpu_side_ports[%d]' % \
                         (shader_idx, index, scalar_tlb_index,
                          scalar_tlb_port_id))
 
-    # Connect the memSidePorts (masters) of all the TLBs with the
-    # cpuSidePorts (slaves) of the Coalescers of the next level
+    # Connect the memSidePorts of all the TLBs with the
+    # cpuSidePorts of the Coalescers of the next level
     # < Modify here if you want a different configuration >
     # L1 <-> L2
     l2_coalescer_index = 0
     for TLB_type in L1:
         name = TLB_type['name']
         for index in range(TLB_type['width']):
-            exec('system.%s_tlb[%d].master[0] = \
-                    system.l2_coalescer[0].slave[%d]' % \
+            exec('system.%s_tlb[%d].mem_side_ports[0] = \
+                    system.l2_coalescer[0].cpu_side_ports[%d]' % \
                     (name, index, l2_coalescer_index))
             l2_coalescer_index += 1
     # L2 <-> L3
-    system.l2_tlb[0].master[0] = system.l3_coalescer[0].slave[0]
+    system.l2_tlb[0].mem_side_ports[0] = \
+        system.l3_coalescer[0].cpu_side_ports[0]
 
     return system

@@ -99,7 +99,7 @@ let {{
     SCR scr = Scr64;
     CPSR cpsr = Cpsr;
 
-    if (!ArmSystem::haveSecurity(xc->tcBase()) || inUserMode(cpsr) || scr.smd) {
+    if (!ArmSystem::haveEL(xc->tcBase(), EL3) || inUserMode(cpsr) || scr.smd) {
         fault = disabledFault();
     } else {
         fault = std::make_shared<SecureMonitorCall>(machInst);
@@ -128,7 +128,7 @@ let {{
         bitMask = (bitMask >> imm1) | (bitMask << (intWidth - imm1));
         diff += intWidth;
     }
-    GEM5_VAR_USED uint64_t topBits = ~mask(diff+1);
+    [[maybe_unused]] uint64_t topBits = ~mask(diff+1);
     uint64_t result = imm1 == 0 ? Op164 :
                       (Op164 >> imm1) | (Op164 << (intWidth - imm1));
     result &= bitMask;

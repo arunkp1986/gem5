@@ -48,7 +48,6 @@
 #include <utility>
 #include <vector>
 
-#include "arch/page_size.hh"
 #include "base/loader/memory_image.hh"
 #include "base/loader/symtab.hh"
 #include "base/statistics.hh"
@@ -61,7 +60,6 @@
 #include "mem/port_proxy.hh"
 #include "params/System.hh"
 #include "sim/futex_map.hh"
-#include "sim/mem_pool.hh"
 #include "sim/redirect_path.hh"
 #include "sim/se_signal.hh"
 #include "sim/sim_object.hh"
@@ -322,9 +320,6 @@ class System : public SimObject, public PCEventScope
     bool schedule(PCEvent *event) override;
     bool remove(PCEvent *event) override;
 
-    /** Memory allocation objects for all physical memories in the system. */
-    std::vector<MemPool> memPools;
-
     uint64_t init_param;
 
     /** Port to physical memory used for writing object files into ram at
@@ -346,12 +341,10 @@ class System : public SimObject, public PCEventScope
 
     /** Get a pointer to access the physical memory of the system */
     memory::PhysicalMemory& getPhysMem() { return physmem; }
-
-    /** Amount of physical memory that is still free */
-    Addr freeMemSize(int poolID = 0) const;
+    const memory::PhysicalMemory& getPhysMem() const { return physmem; }
 
     /** Amount of physical memory that exists */
-    Addr memSize(int poolID = 0) const;
+    Addr memSize() const;
 
     /**
      * Check if a physical address is within a range of a memory that
@@ -390,28 +383,13 @@ class System : public SimObject, public PCEventScope
     AddrRangeList getShadowRomRanges() const { return ShadowRomRanges; }
 
     /**
-     * Get the architecture.
-     */
-    Arch getArch() const { return Arch::TheISA; }
-
-    /**
      * Get the guest byte order.
      */
     ByteOrder
     getGuestByteOrder() const
     {
-        return params().byte_order;
+        return workload->byteOrder();
     }
-
-     /**
-     * Get the page bytes for the ISA.
-     */
-    Addr getPageBytes() const { return TheISA::PageBytes; }
-
-    /**
-     * Get the number of bits worth of in-page address for the ISA.
-     */
-    Addr getPageShift() const { return TheISA::PageShift; }
 
     /**
      * The thermal model used for this system (if any).
@@ -596,10 +574,6 @@ class System : public SimObject, public PCEventScope
     const AddrRange &m5opRange() const { return _m5opRange; }
 
   public:
-
-    /// Allocate npages contiguous unused physical pages
-    /// @return Starting address of first page
-    Addr allocPhysPages(int npages, int poolID = 0);
 
     void registerThreadContext(
             ThreadContext *tc, ContextID assigned=InvalidContextID);

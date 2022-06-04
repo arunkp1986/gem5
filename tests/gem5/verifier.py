@@ -154,6 +154,8 @@ class MatchStdout(DerivedGoldStandard):
             re.compile("^info: Standard input is not a terminal"),
             re.compile("^Couldn't unlink "),
             re.compile("^Using GPU kernel code file\(s\) "),
+            re.compile("^.* not found locally\. Downloading"),
+            re.compile("^Finished downloading"),
         ]
 
 class MatchStdoutNoPerf(MatchStdout):
@@ -226,6 +228,21 @@ class MatchRegex(MatchFileRegex):
         if match_stderr:
             filenames.append(constants.gem5_simulation_stderr)
         super(MatchRegex, self).__init__(regex, filenames)
+
+class NoMatchRegex(MatchRegex):
+    """
+    Checks that the given pattern does *not* match
+    """
+    def __init__(self, regex, match_stderr=True, match_stdout=True):
+        super(NoMatchRegex, self).__init__(regex, match_stderr, match_stdout)
+
+    def test(self, params):
+        fixtures = params.fixtures
+        tempdir = fixtures[constants.tempdir_fixture_name].path
+
+        for fname in self.filenames:
+            if self.parse_file(joinpath(tempdir, fname)):
+                test_util.fail('Could not match regex.')
 
 _re_type = type(re.compile(''))
 def _iterable_regex(regex):

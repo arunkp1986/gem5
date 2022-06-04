@@ -54,24 +54,24 @@ namespace ArmISA
 
 GenericISA::BasicDecodeCache<Decoder, ExtMachInst> Decoder::defaultCache;
 
-Decoder::Decoder(ISA* isa)
-    : InstDecoder(&data), data(0), fpscrLen(0), fpscrStride(0),
-      decoderFlavor(isa->decoderFlavor())
+Decoder::Decoder(const ArmDecoderParams &params)
+    : InstDecoder(params, &data), data(0), fpscrLen(0), fpscrStride(0),
+      decoderFlavor(dynamic_cast<ISA *>(params.isa)->decoderFlavor())
 {
     reset();
 
     // Initialize SVE vector length
-    sveLen = (isa->getCurSveVecLenInBitsAtReset() >> 7) - 1;
+    sveLen = (dynamic_cast<ISA *>(params.isa)
+            ->getCurSveVecLenInBitsAtReset() >> 7) - 1;
 }
 
 void
 Decoder::reset()
 {
+    InstDecoder::reset();
     bigThumb = false;
     offset = 0;
     emi = 0;
-    instDone = false;
-    outOfBytes = true;
     foundIt = false;
 }
 
@@ -152,8 +152,9 @@ Decoder::consumeBytes(int numBytes)
 }
 
 void
-Decoder::moreBytes(const PCState &pc, Addr fetchPC)
+Decoder::moreBytes(const PCStateBase &_pc, Addr fetchPC)
 {
+    auto &pc = _pc.as<PCState>();
     data = letoh(data);
     offset = (fetchPC >= pc.instAddr()) ? 0 : pc.instAddr() - fetchPC;
     emi.thumb = pc.thumb();
@@ -171,10 +172,12 @@ Decoder::moreBytes(const PCState &pc, Addr fetchPC)
 }
 
 StaticInstPtr
-Decoder::decode(ArmISA::PCState &pc)
+Decoder::decode(PCStateBase &_pc)
 {
     if (!instDone)
         return NULL;
+
+    auto &pc = _pc.as<PCState>();
 
     const int inst_size((!emi.thumb || emi.bigThumb) ? 4 : 2);
     ExtMachInst this_emi(emi);

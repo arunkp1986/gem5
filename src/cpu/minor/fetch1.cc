@@ -41,6 +41,7 @@
 #include <iomanip>
 #include <sstream>
 
+#include "arch/generic/decoder.hh"
 #include "base/cast.hh"
 #include "base/compiler.hh"
 #include "base/logging.hh"
@@ -83,6 +84,9 @@ Fetch1::Fetch1(const std::string &name_,
     numFetchesInMemorySystem(0),
     numFetchesInITLB(0)
 {
+    for (auto &info: fetchInfo)
+        info.pc.reset(params.isa[0]->newPCState());
+
     if (lineSnap == 0) {
         lineSnap = cpu.cacheLineSize();
         DPRINTF(Fetch, "lineSnap set to cache line size of: %d\n",
@@ -95,7 +99,7 @@ Fetch1::Fetch1(const std::string &name_,
             maxLineWidth);
     }
 
-    size_t inst_size = cpu.threads[0]->decoder.moreBytesSize();
+    size_t inst_size = cpu.threads[0]->decoder->moreBytesSize();
 
     /* These assertions should be copied to the Python config. as well */
     if ((lineSnap % inst_size) != 0) {
@@ -157,7 +161,7 @@ Fetch1::fetchLine(ThreadID tid)
     /* If line_offset != 0, a request is pushed for the remainder of the
      * line. */
     /* Use a lower, sizeof(MachInst) aligned address for the fetch */
-    Addr aligned_pc = thread.pc.instAddr() & ~((Addr) lineSnap - 1);
+    Addr aligned_pc = thread.fetchAddr & ~((Addr) lineSnap - 1);
     unsigned int line_offset = aligned_pc % lineSnap;
     unsigned int request_size = maxLineWidth - line_offset;
 
@@ -166,17 +170,18 @@ Fetch1::fetchLine(ThreadID tid)
         thread.streamSeqNum, thread.predictionSeqNum,
         lineSeqNum);
 
-    FetchRequestPtr request = new FetchRequest(*this, request_id, thread.pc);
+    FetchRequestPtr request = new FetchRequest(*this, request_id,
+            thread.fetchAddr);
 
     DPRINTF(Fetch, "Inserting fetch into the fetch queue "
         "%s addr: 0x%x pc: %s line_offset: %d request_size: %d\n",
-        request_id, aligned_pc, thread.pc, line_offset, request_size);
+        request_id, aligned_pc, thread.fetchAddr, line_offset, request_size);
 
     request->request->setContext(cpu.threads[tid]->getTC()->contextId());
     request->request->setVirt(
         aligned_pc, request_size, Request::INST_FETCH, cpu.instRequestorId(),
         /* I've no idea why we need the PC, but give it */
-        thread.pc.instAddr());
+        thread.fetchAddr);
 
     DPRINTF(Fetch, "Submitting ITLB request\n");
     numFetchesInITLB++;
@@ -200,7 +205,7 @@ Fetch1::fetchLine(ThreadID tid)
     /* Step the PC for the next line onto the line aligned next address.
      * Note that as instructions can span lines, this PC is only a
      * reliable 'new' PC if the next line has a new stream sequence number. */
-    thread.pc.set(aligned_pc + request_size);
+    thread.fetchAddr = aligned_pc + request_size;
 }
 
 std::ostream &
@@ -510,7 +515,8 @@ Fetch1::changeStream(const BranchData &branch)
         thread.state = FetchRunning;
         break;
     }
-    thread.pc = branch.target;
+    set(thread.pc, branch.target);
+    thread.fetchAddr = thread.pc->instAddr();
 }
 
 void
@@ -543,8 +549,10 @@ Fetch1::processResponse(Fetch1::FetchRequestPtr response,
     line.setFault(response->fault);
     /* Make sequence numbers valid in return */
     line.id = response->id;
-    /* Set PC to virtual address */
-    line.pc = response->pc;
+    /* Set the PC in case there was a sequence change */
+    set(line.pc, thread.pc);
+    /* Set fetch address to virtual address */
+    line.fetchAddr = response->pc;
     /* Set the lineBase, which is a sizeof(MachInst) aligned address <=
      *  pc.instAddr() */
     line.lineBaseAddr = response->request->getVaddr();
@@ -711,11 +719,11 @@ Fetch1::wakeupFetch(ThreadID tid)
 {
     ThreadContext *thread_ctx = cpu.getContext(tid);
     Fetch1ThreadInfo &thread = fetchInfo[tid];
-    thread.pc = thread_ctx->pcState();
+    set(thread.pc, thread_ctx->pcState());
+    thread.fetchAddr = thread.pc->instAddr();
     thread.state = FetchRunning;
     thread.wakeupGuard = true;
-    DPRINTF(Fetch, "[tid:%d]: Changing stream wakeup %s\n",
-            tid, thread_ctx->pcState());
+    DPRINTF(Fetch, "[tid:%d]: Changing stream wakeup %s\n", tid, *thread.pc);
 
     cpu.wakeupOnEvent(Pipeline::Fetch1StageId);
 }

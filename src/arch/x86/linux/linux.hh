@@ -81,15 +81,11 @@ namespace guest_abi
 
 template <typename ABI>
 struct Result<ABI, SyscallReturn,
-    typename std::enable_if_t<std::is_base_of<
-        X86Linux::SyscallABI, ABI>::value>>
+    typename std::enable_if_t<std::is_base_of_v<X86Linux::SyscallABI, ABI>>>
 {
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
     {
-        if (ret.suppressed() || ret.needsRetry())
-            return;
-
         tc->setIntReg(X86ISA::INTREG_RAX, ret.encodedValue());
     }
 };

@@ -39,6 +39,8 @@
 
 #include <cassert>
 
+#include "arch/generic/decoder.hh"
+
 namespace gem5
 {
 
@@ -95,7 +97,7 @@ NonCachingSimpleCPU::fetchInstMem()
 
     auto *bd = bd_it->second;
     Addr offset = ifetch_req->getPaddr() - bd->range().start();
-    memcpy(decoder.moreBytesPtr(), bd->ptr() + offset, ifetch_req->getSize());
+    memcpy(decoder->moreBytesPtr(), bd->ptr() + offset, ifetch_req->getSize());
     return 0;
 }
 

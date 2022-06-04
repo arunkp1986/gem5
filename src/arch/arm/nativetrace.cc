@@ -55,7 +55,7 @@ using namespace ArmISA;
 
 namespace Trace {
 
-GEM5_VAR_USED static const char *regNames[] = {
+[[maybe_unused]] static const char *regNames[] = {
     "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
     "r8", "r9", "r10", "fp", "r12", "sp", "lr", "pc",
     "cpsr", "f0", "f1", "f2", "f3", "f4", "f5", "f6",
@@ -114,7 +114,7 @@ Trace::ArmNativeTrace::ThreadState::update(ThreadContext *tc)
     }
 
     //R15, aliased with the PC
-    newState[STATE_PC] = tc->pcState().npc();
+    newState[STATE_PC] = tc->pcState().as<ArmISA::PCState>().npc();
     changed[STATE_PC] = (newState[STATE_PC] != oldState[STATE_PC]);
 
     //CPSR
@@ -142,7 +142,7 @@ Trace::ArmNativeTrace::check(NativeTraceRecord *record)
     ThreadContext *tc = record->getThread();
     // This area is read only on the target. It can't stop there to tell us
     // what's going on, so we should skip over anything there also.
-    if (tc->nextInstAddr() > 0xffff0000)
+    if (tc->pcState().as<ArmISA::PCState>().npc() > 0xffff0000)
         return;
     nState.update(this);
     mState.update(tc);

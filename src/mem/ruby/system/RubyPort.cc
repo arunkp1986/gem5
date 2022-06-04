@@ -95,6 +95,9 @@ RubyPort::init()
     m_mandatory_q_ptr = m_controller->getMandatoryQueue();
     for (const auto &response_port : response_ports)
         response_port->sendRangeChange();
+    if (gotAddrRanges == 0 && FullSystem) {
+        pioResponsePort.sendRangeChange();
+    }
 }
 
 Port &
@@ -213,7 +216,7 @@ RubyPort::PioResponsePort::recvTimingReq(PacketPtr pkt)
             if (it->contains(pkt->getAddr())) {
                 // generally it is not safe to assume success here as
                 // the port could be blocked
-                GEM5_VAR_USED bool success =
+                [[maybe_unused]] bool success =
                     ruby_port->request_ports[i]->sendTimingReq(pkt);
                 assert(success);
                 return true;
@@ -345,16 +348,27 @@ RubyPort::MemResponsePort::recvAtomic(PacketPtr pkt)
                RubySystem::getBlockSizeBytes());
     }
 
-    // Find appropriate directory for address
-    // This assumes that protocols have a Directory machine,
-    // which has its memPort hooked up to memory. This can
-    // fail for some custom protocols.
-    MachineID id = ruby_port->m_controller->mapAddressToMachine(
-                    pkt->getAddr(), MachineType_Directory);
+    // Find the machine type of memory controller interface
     RubySystem *rs = ruby_port->m_ruby_system;
-    AbstractController *directory =
-        rs->m_abstract_controls[id.getType()][id.getNum()];
-    Tick latency = directory->recvAtomic(pkt);
+    static int mem_interface_type = -1;
+    if (mem_interface_type == -1) {
+        if (rs->m_abstract_controls[MachineType_Directory].size() != 0) {
+            mem_interface_type = MachineType_Directory;
+        }
+        else if (rs->m_abstract_controls[MachineType_Memory].size() != 0) {
+            mem_interface_type = MachineType_Memory;
+        }
+        else {
+            panic("Can't find the memory controller interface\n");
+        }
+    }
+
+    // Find the controller for the target address
+    MachineID id = ruby_port->m_controller->mapAddressToMachine(
+                    pkt->getAddr(), (MachineType)mem_interface_type);
+    AbstractController *mem_interface =
+        rs->m_abstract_controls[mem_interface_type][id.getNum()];
+    Tick latency = mem_interface->recvAtomic(pkt);
     if (access_backing_store)
         rs->getPhysMem()->access(pkt);
     return latency;
@@ -380,7 +394,7 @@ RubyPort::MemResponsePort::recvFunctional(PacketPtr pkt)
 {
     DPRINTF(RubyPort, "Functional access for address: %#x\n", pkt->getAddr());
 
-    GEM5_VAR_USED RubyPort *rp = static_cast<RubyPort *>(&owner);
+    [[maybe_unused]] RubyPort *rp = static_cast<RubyPort *>(&owner);
     RubySystem *rs = rp->m_ruby_system;
 
     // Check for pio requests and directly send them to the dedicated
@@ -607,7 +621,7 @@ RubyPort::PioResponsePort::getAddrRanges() const
         ranges.splice(ranges.begin(),
                 ruby_port->request_ports[i]->getAddrRanges());
     }
-    for (GEM5_VAR_USED const auto &r : ranges)
+    for ([[maybe_unused]] const auto &r : ranges)
         DPRINTF(RubyPort, "%s\n", r.to_string());
     return ranges;
 }

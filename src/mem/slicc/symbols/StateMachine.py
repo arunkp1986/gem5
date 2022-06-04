@@ -68,7 +68,7 @@ python_class_map = {
 
 class StateMachine(Symbol):
     def __init__(self, symtab, ident, location, pairs, config_parameters):
-        super(StateMachine, self).__init__(symtab, ident, location, pairs)
+        super().__init__(symtab, ident, location, pairs)
         self.table = None
 
         # Data members in the State Machine that have been declared before
@@ -613,7 +613,7 @@ void
 $c_ident::initNetQueues()
 {
     MachineType machine_type = string_to_MachineType("${{self.ident}}");
-    GEM5_VAR_USED int base = MachineType_base_number(machine_type);
+    [[maybe_unused]] int base = MachineType_base_number(machine_type);
 
 ''')
         code.indent()

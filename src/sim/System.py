@@ -44,14 +44,10 @@ from m5.proxy import *
 
 from m5.objects.DVFSHandler import *
 from m5.objects.SimpleMemory import *
+from m5.objects.Workload import StubWorkload
 
 class MemoryMode(Enum): vals = ['invalid', 'atomic', 'timing',
                                 'atomic_noncaching']
-
-if buildEnv['TARGET_ISA'] in ('sparc', 'power'):
-    default_byte_order = 'big'
-else:
-    default_byte_order = 'little'
 
 class System(SimObject):
     type = 'System'
@@ -95,9 +91,6 @@ class System(SimObject):
 
     cache_line_size = Param.Unsigned(64, "Cache line size in bytes")
 
-    byte_order = Param.ByteOrder(default_byte_order,
-                                 "Default byte order of system components")
-
     redirect_paths = VectorParam.RedirectPath([], "Path redirections")
 
     exit_on_work_items = Param.Bool(False, "Exit from the simulation loop when "
@@ -117,7 +110,7 @@ class System(SimObject):
     work_cpus_ckpt_count = Param.Counter(0,
         "create checkpoint when active cpu count value is reached")
 
-    workload = Param.Workload(NULL, "Workload to run on this system")
+    workload = Param.Workload(StubWorkload(), "Workload to run on this system")
     init_param = Param.UInt64(0, "numerical value to pass into simulator")
     readfile = Param.String("", "file to read startup script from")
     symbolfile = Param.String("", "file to get the symbols from")

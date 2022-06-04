@@ -10,7 +10,8 @@ gem5_root="${dir}/.."
 build_dir="${gem5_root}/build"
 
 # All Docker images in the gem5 testing GCR which we want to compile with.
-images=("gcc-version-10"
+images=("gcc-version-11"
+        "gcc-version-10"
         "gcc-version-9"
         "gcc-version-8"
         "gcc-version-7"
@@ -29,7 +30,7 @@ images=("gcc-version-10"
 
 # A subset of the above list: these images will build against every target,
 # ignoring builds_per_compiler.
-comprehensive=("gcc-version-10"
+comprehensive=("gcc-version-11"
                "clang-version-11")
 
 # All build targets in build_opt/ which we want to build using each image.
@@ -49,7 +50,7 @@ builds=("ARM"
         "RISCV"
         "SPARC"
         "X86"
-        "X86_MESI_Two_Level"
+        "X86_MI_example"
         "X86_MOESI_AMD_Base")
 
 # The optimizations to use for each build target.
@@ -98,7 +99,7 @@ for compiler in ${images[@]}; do
     # targets for this test
     build_indices=(${build_permutation[@]:0:$builds_count})
 
-    repo_name="${base_url}/${compiler}:latest"
+    repo_name="${base_url}/${compiler}:v21-2"
 
     # Grab compiler image
     docker pull $repo_name >/dev/null

@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -37,6 +35,7 @@
 #include <array>
 #include <type_traits>
 
+#include "arch/amdgpu/common/tlb.hh"
 #include "arch/amdgpu/gcn3/gpu_registers.hh"
 #include "gpu-compute/dispatcher.hh"
 #include "gpu-compute/hsa_queue_entry.hh"
@@ -57,7 +56,7 @@ namespace Gcn3ISA
         template<typename T> T
         readConstVal(int opIdx) const
         {
-            panic_if(!std::is_integral<T>::value, "Constant values must "
+            panic_if(!std::is_integral_v<T>, "Constant values must "
                      "be an integer.\n");
             T val(0);
 

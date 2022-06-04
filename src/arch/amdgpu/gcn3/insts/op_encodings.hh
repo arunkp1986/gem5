@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -634,6 +632,7 @@ namespace Gcn3ISA
             Addr stride = 0;
             Addr buf_idx = 0;
             Addr buf_off = 0;
+            Addr buffer_offset = 0;
             BufferRsrcDescriptor rsrc_desc;
 
             std::memcpy((void*)&rsrc_desc, s_rsrc_desc.rawDataPtr(),
@@ -656,6 +655,26 @@ namespace Gcn3ISA
 
                     buf_off = v_off[lane] + inst_offset;
 
+                    if (rsrc_desc.swizzleEn) {
+                        Addr idx_stride = 8 << rsrc_desc.idxStride;
+                        Addr elem_size = 2 << rsrc_desc.elemSize;
+                        Addr idx_msb = buf_idx / idx_stride;
+                        Addr idx_lsb = buf_idx % idx_stride;
+                        Addr off_msb = buf_off / elem_size;
+                        Addr off_lsb = buf_off % elem_size;
+                        DPRINTF(GCN3, "mubuf swizzled lane %d: "
+                                "idx_stride = %llx, elem_size = %llx, "
+                                "idx_msb = %llx, idx_lsb = %llx, "
+                                "off_msb = %llx, off_lsb = %llx\n",
+                                lane, idx_stride, elem_size, idx_msb, idx_lsb,
+                                off_msb, off_lsb);
+
+                        buffer_offset =(idx_msb * stride + off_msb * elem_size)
+                            * idx_stride + idx_lsb * elem_size + off_lsb;
+                    } else {
+                        buffer_offset = buf_off + stride * buf_idx;
+                    }
+
 
                     /**
                      * Range check behavior causes out of range accesses to
@@ -665,7 +684,7 @@ namespace Gcn3ISA
                      * basis.
                      */
                     if (rsrc_desc.stride == 0 || !rsrc_desc.swizzleEn) {
-                        if (buf_off + stride * buf_idx >=
+                        if (buffer_offset >=
                             rsrc_desc.numRecords - s_offset.rawData()) {
                             DPRINTF(GCN3, "mubuf out-of-bounds condition 1: "
                                     "lane = %d, buffer_offset = %llx, "
@@ -692,25 +711,7 @@ namespace Gcn3ISA
                         }
                     }
 
-                    if (rsrc_desc.swizzleEn) {
-                        Addr idx_stride = 8 << rsrc_desc.idxStride;
-                        Addr elem_size = 2 << rsrc_desc.elemSize;
-                        Addr idx_msb = buf_idx / idx_stride;
-                        Addr idx_lsb = buf_idx % idx_stride;
-                        Addr off_msb = buf_off / elem_size;
-                        Addr off_lsb = buf_off % elem_size;
-                        DPRINTF(GCN3, "mubuf swizzled lane %d: "
-                                "idx_stride = %llx, elem_size = %llx, "
-                                "idx_msb = %llx, idx_lsb = %llx, "
-                                "off_msb = %llx, off_lsb = %llx\n",
-                                lane, idx_stride, elem_size, idx_msb, idx_lsb,
-                                off_msb, off_lsb);
-
-                        vaddr += ((idx_msb * stride + off_msb * elem_size)
-                            * idx_stride + idx_lsb * elem_size + off_lsb);
-                    } else {
-                        vaddr += buf_off + stride * buf_idx;
-                    }
+                    vaddr += buffer_offset;
 
                     DPRINTF(GCN3, "Calculating mubuf address for lane %d: "
                             "vaddr = %llx, base_addr = %llx, "
@@ -886,12 +887,12 @@ namespace Gcn3ISA
                 for (int lane = 0; lane < NumVecElemPerVecReg; ++lane) {
                     if (gpuDynInst->exec_mask[lane]) {
                         Addr vaddr = gpuDynInst->addr[lane];
-                        AtomicOpFunctor* amo_op =
+                        auto amo_op =
                             gpuDynInst->makeAtomicOpFunctor<T>(
                                 &(reinterpret_cast<T*>(
                                     gpuDynInst->a_data))[lane],
                                 &(reinterpret_cast<T*>(
-                                    gpuDynInst->x_data))[lane]).get();
+                                    gpuDynInst->x_data))[lane]);
 
                         T tmp = wf->ldsChunk->read<T>(vaddr);
                         (*amo_op)(reinterpret_cast<uint8_t *>(&tmp));

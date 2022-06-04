@@ -136,6 +136,12 @@
 #include <string>
 
 #include "arch/arm/decoder.hh"
+#include "arch/arm/gdb-xml/gdb_xml_aarch64_core.hh"
+#include "arch/arm/gdb-xml/gdb_xml_aarch64_fpu.hh"
+#include "arch/arm/gdb-xml/gdb_xml_aarch64_target.hh"
+#include "arch/arm/gdb-xml/gdb_xml_arm_core.hh"
+#include "arch/arm/gdb-xml/gdb_xml_arm_target.hh"
+#include "arch/arm/gdb-xml/gdb_xml_arm_vfpv3.hh"
 #include "arch/arm/pagetable.hh"
 #include "arch/arm/regs/vec.hh"
 #include "arch/arm/system.hh"
@@ -146,12 +152,6 @@
 #include "base/remote_gdb.hh"
 #include "base/socket.hh"
 #include "base/trace.hh"
-#include "blobs/gdb_xml_aarch64_core.hh"
-#include "blobs/gdb_xml_aarch64_fpu.hh"
-#include "blobs/gdb_xml_aarch64_target.hh"
-#include "blobs/gdb_xml_arm_core.hh"
-#include "blobs/gdb_xml_arm_target.hh"
-#include "blobs/gdb_xml_arm_vfpv3.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 #include "cpu/thread_state.hh"
@@ -223,7 +223,7 @@ RemoteGDB::AArch64GdbRegCache::getRegs(ThreadContext *context)
     for (int i = 0; i < 31; ++i)
         r.x[i] = context->readIntReg(INTREG_X0 + i);
     r.spx = context->readIntReg(INTREG_SPX);
-    r.pc = context->pcState().pc();
+    r.pc = context->pcState().instAddr();
     r.cpsr = context->readMiscRegNoEffect(MISCREG_CPSR);
 
     size_t base = 0;
@@ -245,7 +245,7 @@ RemoteGDB::AArch64GdbRegCache::setRegs(ThreadContext *context) const
 
     for (int i = 0; i < 31; ++i)
         context->setIntReg(INTREG_X0 + i, r.x[i]);
-    auto pc_state = context->pcState();
+    auto pc_state = context->pcState().as<PCState>();
     pc_state.set(r.pc);
     context->pcState(pc_state);
     context->setMiscRegNoEffect(MISCREG_CPSR, r.cpsr);
@@ -287,7 +287,7 @@ RemoteGDB::AArch32GdbRegCache::getRegs(ThreadContext *context)
     r.gpr[12] = context->readIntReg(INTREG_R12);
     r.gpr[13] = context->readIntReg(INTREG_SP);
     r.gpr[14] = context->readIntReg(INTREG_LR);
-    r.gpr[15] = context->pcState().pc();
+    r.gpr[15] = context->pcState().instAddr();
     r.cpsr = context->readMiscRegNoEffect(MISCREG_CPSR);
 
     // One day somebody will implement transfer of FPRs correctly.
@@ -317,7 +317,7 @@ RemoteGDB::AArch32GdbRegCache::setRegs(ThreadContext *context) const
     context->setIntReg(INTREG_R12, r.gpr[12]);
     context->setIntReg(INTREG_SP, r.gpr[13]);
     context->setIntReg(INTREG_LR, r.gpr[14]);
-    auto pc_state = context->pcState();
+    PCState pc_state = context->pcState().as<PCState>();
     pc_state.set(r.gpr[15]);
     context->pcState(pc_state);
 
@@ -359,6 +359,13 @@ RemoteGDB::gdbRegs()
         return &regCache64;
     else
         return &regCache32;
+}
+
+bool
+RemoteGDB::checkBpLen(size_t len)
+{
+    // 2 for Thumb ISA, 4 for ARM ISA.
+    return len == 2 || len == 4;
 }
 
 } // namespace gem5

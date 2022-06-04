@@ -40,7 +40,6 @@
 #include <iomanip>
 #include <sstream>
 
-#include "arch/locked_mem.hh"
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
@@ -81,9 +80,9 @@ void
 LSQ::LSQRequest::tryToSuppressFault()
 {
     SimpleThread &thread = *port.cpu.threads[inst->id.threadId];
-    TheISA::PCState old_pc = thread.pcState();
+    std::unique_ptr<PCStateBase> old_pc(thread.pcState().clone());
     ExecContext context(port.cpu, thread, port.execute, inst, zeroReg);
-    GEM5_VAR_USED Fault fault = inst->translationFault;
+    [[maybe_unused]] Fault fault = inst->translationFault;
 
     // Give the instruction a chance to suppress a translation fault
     inst->translationFault = inst->staticInst->initiateAcc(&context, nullptr);
@@ -93,7 +92,7 @@ LSQ::LSQRequest::tryToSuppressFault()
     } else {
         assert(inst->translationFault == fault);
     }
-    thread.pcState(old_pc);
+    thread.pcState(*old_pc);
 }
 
 void
@@ -103,14 +102,14 @@ LSQ::LSQRequest::completeDisabledMemAccess()
              *inst);
 
     SimpleThread &thread = *port.cpu.threads[inst->id.threadId];
-    TheISA::PCState old_pc = thread.pcState();
+    std::unique_ptr<PCStateBase> old_pc(thread.pcState().clone());
 
     ExecContext context(port.cpu, thread, port.execute, inst, zeroReg);
 
     context.setMemAccPredicate(false);
     inst->staticInst->completeAcc(nullptr, &context, inst->traceData);
 
-    thread.pcState(old_pc);
+    thread.pcState(*old_pc);
 }
 
 void
@@ -339,7 +338,7 @@ LSQ::SplitDataRequest::finish(const Fault &fault_, const RequestPtr &request_,
 {
     port.numAccessesInDTLB--;
 
-    GEM5_VAR_USED unsigned int expected_fragment_index =
+    [[maybe_unused]] unsigned int expected_fragment_index =
         numTranslatedFragments;
 
     numInTranslationFragments--;
@@ -480,7 +479,7 @@ LSQ::SplitDataRequest::makeFragmentRequests()
     for (unsigned int fragment_index = 0; fragment_index < numFragments;
          fragment_index++)
     {
-        GEM5_VAR_USED bool is_last_fragment = false;
+        [[maybe_unused]] bool is_last_fragment = false;
 
         if (fragment_addr == base_addr) {
             /* First fragment */
@@ -1132,22 +1131,22 @@ LSQ::tryToSendToTransfers(LSQRequestPtr request)
 
         SimpleThread &thread = *cpu.threads[request->inst->id.threadId];
 
-        TheISA::PCState old_pc = thread.pcState();
+        std::unique_ptr<PCStateBase> old_pc(thread.pcState().clone());
         ExecContext context(cpu, thread, execute, request->inst, zeroReg);
 
         /* Handle LLSC requests and tests */
         if (is_load) {
-            TheISA::handleLockedRead(&context, request->request);
+            thread.getIsaPtr()->handleLockedRead(&context, request->request);
         } else {
-            do_access = TheISA::handleLockedWrite(&context,
-                request->request, cacheBlockMask);
+            do_access = thread.getIsaPtr()->handleLockedWrite(&context,
+                    request->request, cacheBlockMask);
 
             if (!do_access) {
                 DPRINTF(MinorMem, "Not perfoming a memory "
                     "access for store conditional\n");
             }
         }
-        thread.pcState(old_pc);
+        thread.pcState(*old_pc);
     }
 
     /* See the do_access comment above */
@@ -1649,7 +1648,7 @@ LSQ::pushRequest(MinorDynInstPtr inst, bool isLoad, uint8_t *data,
     request->request->setVirt(
         addr, size, flags, cpu.dataRequestorId(),
         /* I've no idea why we need the PC, but give it */
-        inst->pc.instAddr(), std::move(amo_op));
+        inst->pc->instAddr(), std::move(amo_op));
     request->request->setByteEnable(byte_enable);
 
     requests.push(request);
@@ -1769,8 +1768,8 @@ LSQ::recvTimingSnoopReq(PacketPtr pkt)
 
     if (pkt->isInvalidate() || pkt->isWrite()) {
         for (ThreadID tid = 0; tid < cpu.numThreads; tid++) {
-            TheISA::handleLockedSnoop(cpu.getContext(tid), pkt,
-                                      cacheBlockMask);
+            cpu.getContext(tid)->getIsaPtr()->handleLockedSnoop(
+                    pkt, cacheBlockMask);
         }
     }
 }
@@ -1791,8 +1790,8 @@ LSQ::threadSnoop(LSQRequestPtr request)
             }
 
             if (pkt->isInvalidate() || pkt->isWrite()) {
-                TheISA::handleLockedSnoop(cpu.getContext(tid), pkt,
-                                          cacheBlockMask);
+                cpu.getContext(tid)->getIsaPtr()->handleLockedSnoop(pkt,
+                        cacheBlockMask);
             }
         }
     }

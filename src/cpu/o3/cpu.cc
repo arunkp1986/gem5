@@ -87,16 +87,12 @@ CPU::CPU(const O3CPUParams &params)
       iew(this, params),
       commit(this, params),
 
-      /* It is mandatory that all SMT threads use the same renaming mode as
-       * they are sharing registers and rename */
-      vecMode(params.isa[0]->initVecRegRenameMode()),
       regFile(params.numPhysIntRegs,
               params.numPhysFloatRegs,
               params.numPhysVecRegs,
               params.numPhysVecPredRegs,
               params.numPhysCCRegs,
-              params.isa[0]->regClasses(),
-              vecMode),
+              params.isa[0]->regClasses()),
 
       freeList(name() + ".freelist", &regFile),
 
@@ -221,12 +217,8 @@ CPU::CPU(const O3CPUParams &params)
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         isa[tid] = dynamic_cast<TheISA::ISA *>(params.isa[tid]);
-        assert(isa[tid]);
-        assert(isa[tid]->initVecRegRenameMode() ==
-                isa[0]->initVecRegRenameMode());
-
-        commitRenameMap[tid].init(regClasses, &regFile, &freeList, vecMode);
-        renameMap[tid].init(regClasses, &regFile, &freeList, vecMode);
+        commitRenameMap[tid].init(regClasses, &regFile, &freeList);
+        renameMap[tid].init(regClasses, &regFile, &freeList);
     }
 
     // Initialize rename map to assign physical registers to the
@@ -249,29 +241,23 @@ CPU::CPU(const O3CPUParams &params)
                     RegId(FloatRegClass, ridx), phys_reg);
         }
 
-        /* Here we need two 'interfaces' the 'whole register' and the
-         * 'register element'. At any point only one of them will be
-         * active. */
         const size_t numVecs = regClasses.at(VecRegClass).size();
-        if (vecMode == enums::Full) {
-            /* Initialize the full-vector interface */
-            for (RegIndex ridx = 0; ridx < numVecs; ++ridx) {
-                RegId rid = RegId(VecRegClass, ridx);
-                PhysRegIdPtr phys_reg = freeList.getVecReg();
-                renameMap[tid].setEntry(rid, phys_reg);
-                commitRenameMap[tid].setEntry(rid, phys_reg);
-            }
-        } else {
-            /* Initialize the vector-element interface */
-            const size_t numElems = regClasses.at(VecElemClass).size();
-            const size_t elemsPerVec = numElems / numVecs;
-            for (RegIndex ridx = 0; ridx < numVecs; ++ridx) {
-                for (ElemIndex ldx = 0; ldx < elemsPerVec; ++ldx) {
-                    RegId lrid = RegId(VecElemClass, ridx, ldx);
-                    PhysRegIdPtr phys_elem = freeList.getVecElem();
-                    renameMap[tid].setEntry(lrid, phys_elem);
-                    commitRenameMap[tid].setEntry(lrid, phys_elem);
-                }
+        /* Initialize the full-vector interface */
+        for (RegIndex ridx = 0; ridx < numVecs; ++ridx) {
+            RegId rid = RegId(VecRegClass, ridx);
+            PhysRegIdPtr phys_reg = freeList.getVecReg();
+            renameMap[tid].setEntry(rid, phys_reg);
+            commitRenameMap[tid].setEntry(rid, phys_reg);
+        }
+        /* Initialize the vector-element interface */
+        const size_t numElems = regClasses.at(VecElemClass).size();
+        const size_t elemsPerVec = numElems / numVecs;
+        for (RegIndex ridx = 0; ridx < numVecs; ++ridx) {
+            for (ElemIndex ldx = 0; ldx < elemsPerVec; ++ldx) {
+                RegId lrid = RegId(VecElemClass, ridx, ldx);
+                PhysRegIdPtr phys_elem = freeList.getVecElem();
+                renameMap[tid].setEntry(lrid, phys_elem);
+                commitRenameMap[tid].setEntry(lrid, phys_elem);
             }
         }
 
@@ -565,8 +551,6 @@ CPU::init()
         // Set noSquashFromTC so that the CPU doesn't squash when initially
         // setting up registers.
         thread[tid]->noSquashFromTC = true;
-        // Initialise the ThreadContext's memory proxies
-        thread[tid]->initMemProxies(thread[tid]->getTC());
     }
 
     // Clear noSquashFromTC.
@@ -831,48 +815,6 @@ CPU::removeThread(ThreadID tid)
         iew.resetEntries();
     }
 */
-}
-
-void
-CPU::setVectorsAsReady(ThreadID tid)
-{
-    const auto &regClasses = isa[tid]->regClasses();
-
-    const size_t numVecs = regClasses.at(VecRegClass).size();
-    if (vecMode == enums::Elem) {
-        const size_t numElems = regClasses.at(VecElemClass).size();
-        const size_t elemsPerVec = numElems / numVecs;
-        for (auto v = 0; v < numVecs; v++) {
-            for (auto e = 0; e < elemsPerVec; e++) {
-                scoreboard.setReg(commitRenameMap[tid].lookup(
-                            RegId(VecElemClass, v, e)));
-            }
-        }
-    } else if (vecMode == enums::Full) {
-        for (auto v = 0; v < numVecs; v++) {
-            scoreboard.setReg(commitRenameMap[tid].lookup(
-                        RegId(VecRegClass, v)));
-        }
-    }
-}
-
-void
-CPU::switchRenameMode(ThreadID tid, UnifiedFreeList* freelist)
-{
-    auto pc = pcState(tid);
-
-    // new_mode is the new vector renaming mode
-    auto new_mode = isa[tid]->vecRegRenameMode(thread[tid]->getTC());
-
-    // We update vecMode only if there has been a change
-    if (new_mode != vecMode) {
-        vecMode = new_mode;
-
-        renameMap[tid].switchMode(vecMode);
-        commitRenameMap[tid].switchMode(vecMode);
-        renameMap[tid].switchFreeList(freelist);
-        setVectorsAsReady(tid);
-    }
 }
 
 Fault
@@ -1172,7 +1114,7 @@ CPU::getWritableVecReg(PhysRegIdPtr phys_reg)
     return regFile.getWritableVecReg(phys_reg);
 }
 
-const TheISA::VecElem&
+RegVal
 CPU::readVecElem(PhysRegIdPtr phys_reg) const
 {
     cpuStats.vecRegfileReads++;
@@ -1222,7 +1164,7 @@ CPU::setVecReg(PhysRegIdPtr phys_reg, const TheISA::VecRegContainer& val)
 }
 
 void
-CPU::setVecElem(PhysRegIdPtr phys_reg, const TheISA::VecElem& val)
+CPU::setVecElem(PhysRegIdPtr phys_reg, RegVal val)
 {
     cpuStats.vecRegfileWrites++;
     regFile.setVecElem(phys_reg, val);
@@ -1246,7 +1188,6 @@ CPU::setCCReg(PhysRegIdPtr phys_reg, RegVal val)
 RegVal
 CPU::readArchIntReg(int reg_idx, ThreadID tid)
 {
-    cpuStats.intRegfileReads++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
             RegId(IntRegClass, reg_idx));
 
@@ -1256,7 +1197,6 @@ CPU::readArchIntReg(int reg_idx, ThreadID tid)
 RegVal
 CPU::readArchFloatReg(int reg_idx, ThreadID tid)
 {
-    cpuStats.fpRegfileReads++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
         RegId(FloatRegClass, reg_idx));
 
@@ -1268,7 +1208,7 @@ CPU::readArchVecReg(int reg_idx, ThreadID tid) const
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecRegClass, reg_idx));
-    return readVecReg(phys_reg);
+    return regFile.readVecReg(phys_reg);
 }
 
 TheISA::VecRegContainer&
@@ -1276,16 +1216,16 @@ CPU::getWritableArchVecReg(int reg_idx, ThreadID tid)
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecRegClass, reg_idx));
-    return getWritableVecReg(phys_reg);
+    return regFile.getWritableVecReg(phys_reg);
 }
 
-const TheISA::VecElem&
+RegVal
 CPU::readArchVecElem(
         const RegIndex& reg_idx, const ElemIndex& ldx, ThreadID tid) const
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                                 RegId(VecElemClass, reg_idx, ldx));
-    return readVecElem(phys_reg);
+    return regFile.readVecElem(phys_reg);
 }
 
 const TheISA::VecPredRegContainer&
@@ -1293,7 +1233,7 @@ CPU::readArchVecPredReg(int reg_idx, ThreadID tid) const
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecPredRegClass, reg_idx));
-    return readVecPredReg(phys_reg);
+    return regFile.readVecPredReg(phys_reg);
 }
 
 TheISA::VecPredRegContainer&
@@ -1301,13 +1241,12 @@ CPU::getWritableArchVecPredReg(int reg_idx, ThreadID tid)
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecPredRegClass, reg_idx));
-    return getWritableVecPredReg(phys_reg);
+    return regFile.getWritableVecPredReg(phys_reg);
 }
 
 RegVal
 CPU::readArchCCReg(int reg_idx, ThreadID tid)
 {
-    cpuStats.ccRegfileReads++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
         RegId(CCRegClass, reg_idx));
 
@@ -1317,7 +1256,6 @@ CPU::readArchCCReg(int reg_idx, ThreadID tid)
 void
 CPU::setArchIntReg(int reg_idx, RegVal val, ThreadID tid)
 {
-    cpuStats.intRegfileWrites++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
             RegId(IntRegClass, reg_idx));
 
@@ -1327,7 +1265,6 @@ CPU::setArchIntReg(int reg_idx, RegVal val, ThreadID tid)
 void
 CPU::setArchFloatReg(int reg_idx, RegVal val, ThreadID tid)
 {
-    cpuStats.fpRegfileWrites++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
             RegId(FloatRegClass, reg_idx));
 
@@ -1340,16 +1277,16 @@ CPU::setArchVecReg(int reg_idx, const TheISA::VecRegContainer& val,
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecRegClass, reg_idx));
-    setVecReg(phys_reg, val);
+    regFile.setVecReg(phys_reg, val);
 }
 
 void
 CPU::setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
-                                const TheISA::VecElem& val, ThreadID tid)
+                    RegVal val, ThreadID tid)
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecElemClass, reg_idx, ldx));
-    setVecElem(phys_reg, val);
+    regFile.setVecElem(phys_reg, val);
 }
 
 void
@@ -1358,47 +1295,28 @@ CPU::setArchVecPredReg(int reg_idx,
 {
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                 RegId(VecPredRegClass, reg_idx));
-    setVecPredReg(phys_reg, val);
+    regFile.setVecPredReg(phys_reg, val);
 }
 
 void
 CPU::setArchCCReg(int reg_idx, RegVal val, ThreadID tid)
 {
-    cpuStats.ccRegfileWrites++;
     PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
             RegId(CCRegClass, reg_idx));
 
     regFile.setCCReg(phys_reg, val);
 }
 
-TheISA::PCState
+const PCStateBase &
 CPU::pcState(ThreadID tid)
 {
     return commit.pcState(tid);
 }
 
 void
-CPU::pcState(const TheISA::PCState &val, ThreadID tid)
+CPU::pcState(const PCStateBase &val, ThreadID tid)
 {
     commit.pcState(val, tid);
-}
-
-Addr
-CPU::instAddr(ThreadID tid)
-{
-    return commit.instAddr(tid);
-}
-
-Addr
-CPU::nextInstAddr(ThreadID tid)
-{
-    return commit.nextInstAddr(tid);
-}
-
-MicroPC
-CPU::microPC(ThreadID tid)
-{
-    return commit.microPC(tid);
 }
 
 void
@@ -1432,7 +1350,7 @@ CPU::instDone(ThreadID tid, const DynInstPtr &inst)
     thread[tid]->threadStats.numOps++;
     cpuStats.committedOps[tid]++;
 
-    probeInstCommit(inst->staticInst, inst->instAddr());
+    probeInstCommit(inst->staticInst, inst->pcState().instAddr());
 }
 
 void
@@ -1576,7 +1494,8 @@ CPU::dumpInsts()
     while (inst_list_it != instList.end()) {
         cprintf("Instruction:%i\nPC:%#x\n[tid:%i]\n[sn:%lli]\nIssued:%i\n"
                 "Squashed:%i\n\n",
-                num, (*inst_list_it)->instAddr(), (*inst_list_it)->threadNumber,
+                num, (*inst_list_it)->pcState().instAddr(),
+                (*inst_list_it)->threadNumber,
                 (*inst_list_it)->seqNum, (*inst_list_it)->isIssued(),
                 (*inst_list_it)->isSquashed());
         inst_list_it++;

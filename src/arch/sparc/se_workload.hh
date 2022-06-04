@@ -83,15 +83,12 @@ namespace guest_abi
 
 template <typename ABI>
 struct Result<ABI, SyscallReturn,
-    typename std::enable_if_t<std::is_base_of<
-        SparcISA::SEWorkload::BaseSyscallABI, ABI>::value>>
+    typename std::enable_if_t<std::is_base_of_v<
+        SparcISA::SEWorkload::BaseSyscallABI, ABI>>>
 {
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
     {
-        if (ret.suppressed() || ret.needsRetry())
-            return;
-
         // check for error condition.  SPARC syscall convention is to
         // indicate success/failure in reg the carry bit of the ccr
         // and put the return value itself in the standard return value reg.
@@ -118,8 +115,8 @@ struct Result<ABI, SyscallReturn,
 template <typename Arg>
 struct Argument<SparcISA::SEWorkload::SyscallABI32, Arg,
     typename std::enable_if_t<
-        std::is_integral<Arg>::value &&
-        SparcISA::SEWorkload::SyscallABI32::IsWide<Arg>::value>>
+        std::is_integral_v<Arg> &&
+        SparcISA::SEWorkload::SyscallABI32::IsWideV<Arg>>>
 {
     using ABI = SparcISA::SEWorkload::SyscallABI32;
 

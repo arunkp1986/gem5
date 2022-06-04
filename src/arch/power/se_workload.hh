@@ -46,7 +46,9 @@ class SEWorkload : public gem5::SEWorkload
 {
   public:
     using Params = PowerSEWorkloadParams;
-    SEWorkload(const Params &p) : gem5::SEWorkload(p) {}
+    SEWorkload(const Params &p, Addr page_shift) :
+        gem5::SEWorkload(p, page_shift)
+    {}
 
     void
     setSystem(System *sys) override
@@ -75,9 +77,6 @@ struct Result<PowerISA::SEWorkload::SyscallABI, SyscallReturn>
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
     {
-        if (ret.suppressed() || ret.needsRetry())
-            return;
-
         PowerISA::Cr cr = tc->readIntReg(PowerISA::INTREG_CR);
         if (ret.successful()) {
             cr.cr0.so = 0;

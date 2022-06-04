@@ -1893,10 +1893,12 @@ DRAMInterface::DRAMStats::DRAMStats(DRAMInterface &_dram)
 
     ADD_STAT(bytesPerActivate, statistics::units::Byte::get(),
              "Bytes accessed per row activation"),
+
     ADD_STAT(bytesRead, statistics::units::Byte::get(),
-             "Total number of bytes read from DRAM"),
+            "Total bytes read"),
     ADD_STAT(bytesWritten, statistics::units::Byte::get(),
-            "Total number of bytes written to DRAM"),
+            "Total bytes written"),
+
     ADD_STAT(avgRdBW, statistics::units::Rate<
                 statistics::units::Byte, statistics::units::Second>::get(),
              "Average DRAM read bandwidth in MiBytes/s"),
@@ -2548,10 +2550,6 @@ NVMInterface::NVMStats::NVMStats(NVMInterface &_nvm)
                 statistics::units::Tick, statistics::units::Count>::get(),
              "Average memory access latency per NVM burst"),
 
-    ADD_STAT(bytesRead, statistics::units::Byte::get(),
-             "Total number of bytes read from NVM"),
-    ADD_STAT(bytesWritten, statistics::units::Byte::get(),
-             "Total number of bytes written to NVM"),
     ADD_STAT(avgRdBW, statistics::units::Rate<
                 statistics::units::Byte, statistics::units::Second>::get(),
              "Average DRAM read bandwidth in MiBytes/s"),

@@ -2,8 +2,6 @@
  * Copyright (c) 2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -39,7 +37,10 @@
 #include "debug/GPUCommandProc.hh"
 #include "debug/GPUKernelInfo.hh"
 #include "gpu-compute/dispatcher.hh"
+#include "mem/se_translating_port_proxy.hh"
+#include "mem/translating_port_proxy.hh"
 #include "params/GPUCommandProcessor.hh"
+#include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/proxy_ptr.hh"
 #include "sim/syscall_emul_buf.hh"
@@ -62,19 +63,15 @@ GPUCommandProcessor::hsaPacketProc()
     return *hsaPP;
 }
 
-void
-GPUCommandProcessor::translateOrDie(Addr vaddr, Addr &paddr)
+TranslationGenPtr
+GPUCommandProcessor::translate(Addr vaddr, Addr size)
 {
-    /**
-     * Grab the process and try to translate the virtual address with it;
-     * with new extensions, it will likely be wrong to just arbitrarily
-     * grab context zero.
-     */
+    // Grab the process and try to translate the virtual address with it; with
+    // new extensions, it will likely be wrong to just arbitrarily grab context
+    // zero.
     auto process = sys->threads[0]->getProcessPtr();
 
-    if (!process->pTable->translate(vaddr, paddr)) {
-        fatal("failed translation: vaddr 0x%x\n", vaddr);
-    }
+    return process->pTable->translateRange(vaddr, size);
 }
 
 /**
@@ -106,7 +103,10 @@ GPUCommandProcessor::submitDispatchPkt(void *raw_pkt, uint32_t queue_id,
      * space to pull out the kernel code descriptor.
      */
     auto *tc = sys->threads[0];
-    auto &virt_proxy = tc->getVirtProxy();
+
+    TranslatingPortProxy fs_proxy(tc);
+    SETranslatingPortProxy se_proxy(tc);
+    PortProxy &virt_proxy = FullSystem ? fs_proxy : se_proxy;
 
     /**
      * The kernel_object is a pointer to the machine code, whose entry

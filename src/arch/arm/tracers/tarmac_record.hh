@@ -162,7 +162,7 @@ class TarmacTracerRecord : public TarmacBaseRecord
         /** True if register entry is valid */
         bool regValid;
         /** Register class */
-        RegClass regClass;
+        RegClassType regClass;
         /** Register arch number */
         RegIndex regRel;
         /** Register name to be printed */
@@ -187,7 +187,7 @@ class TarmacTracerRecord : public TarmacBaseRecord
 
   public:
     TarmacTracerRecord(Tick _when, ThreadContext *_thread,
-                       const StaticInstPtr _staticInst, ArmISA::PCState _pc,
+                       const StaticInstPtr _staticInst, const PCStateBase &_pc,
                        TarmacTracer& _tracer,
                        const StaticInstPtr _macroStaticInst = NULL);
 

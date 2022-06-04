@@ -61,14 +61,12 @@ import workloads
 # the cache class may be 'None' if the particular cache is not present.
 cpu_types = {
 
-    "atomic" : ( AtomicSimpleCPU, None, None, None, None),
+    "atomic" : ( AtomicSimpleCPU, None, None, None),
     "minor" : (MinorCPU,
                devices.L1I, devices.L1D,
-               devices.WalkCache,
                devices.L2),
     "hpi" : ( HPI.HPI,
               HPI.HPI_ICache, HPI.HPI_DCache,
-              HPI.HPI_WalkCache,
               HPI.HPI_L2)
 }
 
@@ -143,8 +141,8 @@ def create(args):
     system.realview.gic.gicv4 = False
 
     system.highest_el_is_64 = True
-    system.have_virtualization = True
-    system.have_security = True
+    system.release.add(ArmExtension('SECURITY'))
+    system.release.add(ArmExtension('VIRTUALIZATION'))
 
     workload_class = workloads.workload_list.get(args.workload)
     system.workload = workload_class(

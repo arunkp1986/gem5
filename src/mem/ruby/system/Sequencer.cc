@@ -613,6 +613,15 @@ Sequencer::hitCallback(SequencerRequest* srequest, DataBlock& data,
             data.setData(&overwrite_val[0],
                          getOffset(request_address), pkt->getSize());
             DPRINTF(RubySequencer, "swap data %s\n", data);
+        } else if (pkt->isAtomicOp()) {
+            // Set the data in the packet to the old value in the cache
+            pkt->setData(
+                data.getData(getOffset(request_address), pkt->getSize()));
+            DPRINTF(RubySequencer, "AMO original data %s\n", data);
+            // execute AMO operation
+            (*(pkt->getAtomicOp()))(
+                data.getDataMod(getOffset(request_address)));
+            DPRINTF(RubySequencer, "AMO new data %s\n", data);
         } else if (type != RubyRequestType_Store_Conditional || llscSuccess) {
             // Types of stores set the actual data here, apart from
             // failed Store Conditional requests
@@ -725,14 +734,7 @@ Sequencer::makeRequest(PacketPtr pkt)
             } else if (pkt->req->isInstFetch()) {
                 primary_type = secondary_type = RubyRequestType_IFETCH;
             } else {
-                bool storeCheck = false;
-                // only X86 need the store check
-                if (system->getArch() == Arch::X86ISA) {
-                    uint32_t flags = pkt->req->getFlags();
-                    storeCheck = flags &
-                        (X86ISA::StoreCheck << X86ISA::FlagShift);
-                }
-                if (storeCheck) {
+                if (pkt->req->isReadModifyWrite()) {
                     primary_type = RubyRequestType_RMW_Read;
                     secondary_type = RubyRequestType_ST;
                 } else {
