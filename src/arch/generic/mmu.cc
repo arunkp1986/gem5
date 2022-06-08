@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012,2016-2017, 2019-2020 ARM Limited
+ * Copyright (c) 2011-2012,2016-2017, 2019-2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -43,15 +43,54 @@
 
 #include "arch/generic/mmu.hh"
 #include "arch/generic/tlb.hh"
+#include "cpu/thread_context.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
 
 void
+BaseMMU::init()
+{
+    auto traverse_hierarchy = [this](BaseTLB *starter) {
+        for (BaseTLB *tlb = starter; tlb; tlb = tlb->nextLevel()) {
+            switch (tlb->type()) {
+              case TypeTLB::instruction:
+                if (instruction.find(tlb) == instruction.end())
+                    instruction.insert(tlb);
+                break;
+              case TypeTLB::data:
+                if (data.find(tlb) == data.end())
+                    data.insert(tlb);
+                break;
+              case TypeTLB::unified:
+                if (unified.find(tlb) == unified.end())
+                    unified.insert(tlb);
+                break;
+              default:
+                panic("Invalid TLB type\n");
+            }
+        }
+    };
+
+    traverse_hierarchy(itb);
+    traverse_hierarchy(dtb);
+}
+
+void
 BaseMMU::flushAll()
 {
-    dtb->flushAll();
-    itb->flushAll();
+    for (auto tlb : instruction) {
+        tlb->flushAll();
+    }
+
+    for (auto tlb : data) {
+        tlb->flushAll();
+    }
+
+    for (auto tlb : unified) {
+        tlb->flushAll();
+    }
 }
 
 void
@@ -87,6 +126,31 @@ BaseMMU::finalizePhysical(const RequestPtr &req, ThreadContext *tc,
                           BaseMMU::Mode mode) const
 {
     return getTlb(mode)->finalizePhysical(req, tc, mode);
+}
+
+BaseMMU::MMUTranslationGen::MMUTranslationGen(Addr page_bytes,
+        Addr new_start, Addr new_size, ThreadContext *new_tc,
+        BaseMMU *new_mmu, BaseMMU::Mode new_mode, Request::Flags new_flags) :
+    TranslationGen(new_start, new_size), tc(new_tc), cid(tc->contextId()),
+    mmu(new_mmu), mode(new_mode), flags(new_flags),
+    pageBytes(page_bytes)
+{}
+
+void
+BaseMMU::MMUTranslationGen::translate(Range &range) const
+{
+    Addr next = roundUp(range.vaddr, pageBytes);
+    if (next == range.vaddr)
+        next += pageBytes;
+    range.size = std::min(range.size, next - range.vaddr);
+
+    auto req = std::make_shared<Request>(
+            range.vaddr, range.size, flags, Request::funcRequestorId, 0, cid);
+
+    range.fault = mmu->translateFunctional(req, tc, mode);
+
+    if (range.fault == NoFault)
+        range.paddr = req->getPaddr();
 }
 
 void

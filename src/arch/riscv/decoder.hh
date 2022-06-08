@@ -37,6 +37,7 @@
 #include "base/types.hh"
 #include "cpu/static_inst.hh"
 #include "debug/Decode.hh"
+#include "params/RiscvDecoder.hh"
 
 namespace gem5
 {
@@ -51,13 +52,11 @@ class Decoder : public InstDecoder
     decode_cache::InstMap<ExtMachInst> instMap;
     bool aligned;
     bool mid;
-    bool more;
 
   protected:
     //The extended machine instruction being generated
     ExtMachInst emi;
     uint32_t machInst;
-    bool instDone;
 
     StaticInstPtr decodeInst(ExtMachInst mach_inst);
 
@@ -67,22 +66,20 @@ class Decoder : public InstDecoder
     StaticInstPtr decode(ExtMachInst mach_inst, Addr addr);
 
   public:
-    Decoder(ISA* isa=nullptr) : InstDecoder(&machInst) { reset(); }
+    Decoder(const RiscvDecoderParams &p) : InstDecoder(p, &machInst)
+    {
+        reset();
+    }
 
-    void process() {}
-    void reset();
+    void reset() override;
 
     inline bool compressed(ExtMachInst inst) { return (inst & 0x3) < 0x3; }
 
     //Use this to give data to the decoder. This should be used
     //when there is control flow.
-    void moreBytes(const PCState &pc, Addr fetchPC);
+    void moreBytes(const PCStateBase &pc, Addr fetchPC) override;
 
-    bool needMoreBytes() { return more; }
-    bool instReady() { return instDone; }
-    void takeOverFrom(Decoder *old) {}
-
-    StaticInstPtr decode(RiscvISA::PCState &nextPC);
+    StaticInstPtr decode(PCStateBase &nextPC) override;
 };
 
 } // namespace RiscvISA

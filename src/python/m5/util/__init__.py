@@ -1,4 +1,4 @@
-# Copyright (c) 2016, 2020 ARM Limited
+# Copyright (c) 2016, 2020-2021 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -41,11 +41,11 @@ import os
 import re
 import sys
 
+from functools import wraps
+
 from . import convert
-from . import jobfile
 
 from .attrdict import attrdict, multiattrdict, optiondict
-from .code_formatter import code_formatter
 from .multidict import multidict
 
 # panic() should be called when something happens that should never
@@ -73,12 +73,42 @@ def warn(fmt, *args):
 def inform(fmt, *args):
     print('info:', fmt % args, file=sys.stdout)
 
+def callOnce(func):
+    """Decorator that enables to run a given function only once. Subsequent
+    calls are discarded."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not wrapper.has_run:
+            wrapper.has_run = True
+            return func(*args, **kwargs)
+    wrapper.has_run = False
+    return wrapper
+
+def deprecated(replacement=None, logger=warn):
+    """This decorator warns the user about a deprecated function."""
+    def decorator(func):
+        @callOnce
+        def notifyDeprecation():
+            try:
+                func_name = lambda f: f.__module__ + '.' +  f.__qualname__
+                message = f'Function {func_name(func)} is deprecated.'
+                if replacement:
+                    message += f' Prefer {func_name(replacement)} instead.'
+            except AttributeError:
+                message = f'Function {func} is deprecated.'
+                if replacement:
+                    message += f' Prefer {replacement} instead.'
+            logger(message)
+        notifyDeprecation()
+        return func
+    return decorator
+
 class Singleton(type):
     def __call__(cls, *args, **kwargs):
         if hasattr(cls, '_instance'):
             return cls._instance
 
-        cls._instance = super(Singleton, cls).__call__(*args, **kwargs)
+        cls._instance = super().__call__(*args, **kwargs)
         return cls._instance
 
 def addToPath(path):
@@ -94,6 +124,17 @@ def addToPath(path):
     # sys.path[0] should always refer to the current script's directory,
     # so place the new dir right after that.
     sys.path.insert(1, path)
+
+def repoPath():
+    """
+    Return the abspath of the gem5 repository.
+    This is relying on the following structure:
+
+    <gem5-repo>/build/<ISA>/gem5.[opt,debug...]
+    """
+    return os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(sys.executable)))
 
 # Apply method to object.
 # applyMethod(obj, 'meth', <args>) is equivalent to obj.meth(<args>)
@@ -145,15 +186,6 @@ def printList(items, indent=4):
         else:
             line += item
             print(line)
-
-def makeDir(path):
-    """Make a directory if it doesn't exist.  If the path does exist,
-    ensure that it is a directory"""
-    if os.path.exists(path):
-        if not os.path.isdir(path):
-            raise AttributeError("%s exists but is not directory" % path)
-    else:
-        os.mkdir(path)
 
 def isInteractive():
     """Check if the simulator is run interactively or in a batch environment"""

@@ -2,8 +2,6 @@
  * Copyright (c) 2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -135,7 +133,7 @@ class GPUCommandProcessor : public DmaVirtDevice
     typedef void (DmaDevice::*DmaFnPtr)(Addr, int, Event*, uint8_t*, Tick);
     void initABI(HSAQueueEntry *task);
     HSAPacketProcessor *hsaPP;
-    void translateOrDie(Addr vaddr, Addr &paddr) override;
+    TranslationGenPtr translate(Addr vaddr, Addr size) override;
 
     /**
      * Perform a DMA read of the read_dispatch_id_field_base_byte_offset

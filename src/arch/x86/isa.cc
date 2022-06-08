@@ -103,7 +103,7 @@ ISA::updateHandyM5Reg(Efer efer, CR0 cr0,
 
     regVal[MISCREG_M5_REG] = m5reg;
     if (tc)
-        tc->getDecoderPtr()->setM5Reg(m5reg);
+        tc->getDecoderPtr()->as<Decoder>().setM5Reg(m5reg);
 }
 
 void
@@ -381,7 +381,7 @@ ISA::setMiscReg(int miscReg, RegVal val)
         break;
       case MISCREG_DR4:
         miscReg = MISCREG_DR6;
-        GEM5_FALLTHROUGH;
+        [[fallthrough]];
       case MISCREG_DR6:
         {
             DR6 dr6 = regVal[MISCREG_DR6];
@@ -398,7 +398,7 @@ ISA::setMiscReg(int miscReg, RegVal val)
         break;
       case MISCREG_DR5:
         miscReg = MISCREG_DR7;
-        GEM5_FALLTHROUGH;
+        [[fallthrough]];
       case MISCREG_DR7:
         {
             DR7 dr7 = regVal[MISCREG_DR7];
@@ -479,7 +479,7 @@ void
 ISA::setThreadContext(ThreadContext *_tc)
 {
     BaseISA::setThreadContext(_tc);
-    tc->getDecoderPtr()->setM5Reg(regVal[MISCREG_M5_REG]);
+    tc->getDecoderPtr()->as<Decoder>().setM5Reg(regVal[MISCREG_M5_REG]);
 }
 
 std::string

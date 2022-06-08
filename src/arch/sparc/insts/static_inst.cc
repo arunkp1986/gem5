@@ -29,6 +29,7 @@
 
 #include "arch/sparc/insts/static_inst.hh"
 
+#include "arch/sparc/pcstate.hh"
 #include "arch/sparc/regs/int.hh"
 #include "arch/sparc/regs/misc.hh"
 #include "base/bitunion.hh"
@@ -79,9 +80,17 @@ SparcStaticInst::printRegArray(std::ostream &os, const RegId *indexArray,
 }
 
 void
-SparcStaticInst::advancePC(SparcISA::PCState &pcState) const
+SparcStaticInst::advancePC(PCStateBase &pcState) const
 {
-    pcState.advance();
+    pcState.as<PCState>().advance();
+}
+
+void
+SparcStaticInst::advancePC(ThreadContext *tc) const
+{
+    PCState pc = tc->pcState().as<PCState>();
+    pc.advance();
+    tc->pcState(pc);
 }
 
 void

@@ -123,6 +123,15 @@ AddOption('--with-asan', action='store_true',
           help='Build with Address Sanitizer if available')
 AddOption('--with-systemc-tests', action='store_true',
           help='Build systemc tests')
+AddOption('--install-hooks', action='store_true',
+          help='Install revision control hooks non-interactively')
+AddOption('--gprof', action='store_true',
+          help='Enable support for the gprof profiler')
+AddOption('--pprof', action='store_true',
+          help='Enable support for the pprof profiler')
+
+# Inject the built_tools directory into the python path.
+sys.path[1:1] = [ Dir('#build_tools').abspath ]
 
 # Imports of gem5_scons happen here since it depends on some options which are
 # declared above.
@@ -130,7 +139,16 @@ from gem5_scons import error, warning, summarize_warnings, parse_build_path
 from gem5_scons import TempFileSpawn, EnvDefaults, MakeAction, MakeActionTool
 import gem5_scons
 from gem5_scons.builders import ConfigFile, AddLocalRPATH, SwitchingHeaders
+from gem5_scons.builders import Blob
+from gem5_scons.sources import TagImpliesTool
 from gem5_scons.util import compareVersions, readCommand
+
+# Disable warnings when targets can be built with multiple environments but
+# with the same actions. This can happen intentionally if, for instance, a
+# generated source file is used to build object files in different ways in
+# different environments, but generating the source file itself is exactly the
+# same. This can be re-enabled from the command line if desired.
+SetOption('warn', 'no-duplicate-environment')
 
 Export('MakeAction')
 
@@ -142,7 +160,7 @@ Export('MakeAction')
 
 main = Environment(tools=[
         'default', 'git', TempFileSpawn, EnvDefaults, MakeActionTool,
-        ConfigFile, AddLocalRPATH, SwitchingHeaders
+        ConfigFile, AddLocalRPATH, SwitchingHeaders, TagImpliesTool, Blob
     ])
 
 main.Tool(SCons.Tool.FindTool(['gcc', 'clang'], main))
@@ -233,9 +251,9 @@ global_vars.AddVariables(
     ('CC', 'C compiler', environ.get('CC', main['CC'])),
     ('CXX', 'C++ compiler', environ.get('CXX', main['CXX'])),
     ('CCFLAGS_EXTRA', 'Extra C and C++ compiler flags', ''),
-    ('LDFLAGS_EXTRA', 'Extra linker flags', ''),
-    ('MARSHAL_CCFLAGS_EXTRA', 'Extra C and C++ marshal compiler flags', ''),
-    ('MARSHAL_LDFLAGS_EXTRA', 'Extra marshal linker flags', ''),
+    ('GEM5PY_CCFLAGS_EXTRA', 'Extra C and C++ gem5py compiler flags', ''),
+    ('GEM5PY_LINKFLAGS_EXTRA', 'Extra marshal gem5py flags', ''),
+    ('LINKFLAGS_EXTRA', 'Extra linker flags', ''),
     ('PYTHON_CONFIG', 'Python config binary to use',
      [ 'python3-config', 'python-config']
     ),
@@ -290,7 +308,7 @@ main.Prepend(CPPPATH=Dir('include'))
 
 # Initialize the Link-Time Optimization (LTO) flags
 main['LTO_CCFLAGS'] = []
-main['LTO_LDFLAGS'] = []
+main['LTO_LINKFLAGS'] = []
 
 # According to the readme, tcmalloc works best if the compiler doesn't
 # assume that we're using the builtin malloc and friends. These flags
@@ -345,9 +363,13 @@ else:
           "src/SConscript to support that compiler.")))
 
 if main['GCC']:
-    if compareVersions(main['CXXVERSION'], "5") < 0:
-        error('gcc version 5 or newer required.\n'
+    if compareVersions(main['CXXVERSION'], "7") < 0:
+        error('gcc version 7 or newer required.\n'
               'Installed version:', main['CXXVERSION'])
+
+    with gem5_scons.Configure(main) as conf:
+        # This warning has a false positive in the systemc code in g++ 11.1.
+        conf.CheckCxxFlag('-Wno-free-nonheap-object')
 
     # Add the appropriate Link-Time Optimization (LTO) flags if `--with-lto` is
     # set.
@@ -362,7 +384,7 @@ if main['GCC']:
             warning('"make" not found, link time optimization will be '
                     'single threaded.')
 
-        for var in 'LTO_CCFLAGS', 'LTO_LDFLAGS':
+        for var in 'LTO_CCFLAGS', 'LTO_LINKFLAGS':
             # Use the same amount of jobs for LTO as we are running scons with.
             main[var] = ['-flto%s' % parallelism]
 
@@ -376,7 +398,7 @@ elif main['CLANG']:
 
     # Set the Link-Time Optimization (LTO) flags if enabled.
     if GetOption('with_lto'):
-        for var in 'LTO_CCFLAGS', 'LTO_LDFLAGS':
+        for var in 'LTO_CCFLAGS', 'LTO_LINKFLAGS':
             main[var] = ['-flto']
 
     # clang has a few additional warnings that we disable.
@@ -402,13 +424,13 @@ if GetOption('with_asan'):
     sanitizers.append('address')
     suppressions_file = Dir('util').File('lsan-suppressions').get_abspath()
     suppressions_opt = 'suppressions=%s' % suppressions_file
-    main['ENV']['LSAN_OPTIONS'] = ':'.join([suppressions_opt,
-                                            'print_suppressions=0'])
+    suppressions_opts = ':'.join([suppressions_opt, 'print_suppressions=0'])
+    main['ENV']['LSAN_OPTIONS'] = suppressions_opts
     print()
     warning('To suppress false positive leaks, set the LSAN_OPTIONS '
             'environment variable to "%s" when running gem5' %
-            suppressions_opt)
-    warning('LSAN_OPTIONS=suppressions=%s' % suppressions_opt)
+            suppressions_opts)
+    warning('LSAN_OPTIONS=%s' % suppressions_opts)
     print()
 if sanitizers:
     sanitizers = ','.join(sanitizers)
@@ -454,24 +476,25 @@ if not GetOption('no_compress_debug'):
 ########################################################################
 
 main['USE_PYTHON'] = not GetOption('without_python')
-if main['USE_PYTHON']:
+
+def config_embedded_python(env):
     # Find Python include and library directories for embedding the
     # interpreter. We rely on python-config to resolve the appropriate
     # includes and linker flags. If you want to link in an alternate version
     # of python, override the PYTHON_CONFIG variable.
 
-    python_config = main.Detect(main['PYTHON_CONFIG'])
+    python_config = env.Detect(env['PYTHON_CONFIG'])
     if python_config is None:
-        error("Can't find a suitable python-config, tried %s" % \
-              main['PYTHON_CONFIG'])
+        error("Can't find a suitable python-config, tried "
+              f"{env['PYTHON_CONFIG']}")
 
-    print("Info: Using Python config: %s" % python_config)
+    print(f"Info: Using Python config: {python_config}")
 
     cmd = [python_config, '--ldflags', '--includes']
 
     # Starting in Python 3.8 the --embed flag is required. Use it if supported.
-    with gem5_scons.Configure(main) as conf:
-        if conf.TryAction('@%s --embed' % python_config)[0]:
+    with gem5_scons.Configure(env) as conf:
+        if conf.TryAction(f'@{python_config} --embed')[0]:
             cmd.append('--embed')
 
     def flag_filter(env, cmd_output):
@@ -481,11 +504,11 @@ if main['USE_PYTHON']:
         useful_flags = list(filter(is_useful, flags))
         env.MergeFlags(' '.join(useful_flags))
 
-    main.ParseConfig(cmd, flag_filter)
+    env.ParseConfig(cmd, flag_filter)
 
-    main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
+    env.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
 
-    with gem5_scons.Configure(main) as conf:
+    with gem5_scons.Configure(env) as conf:
         # verify that this stuff works
         if not conf.CheckHeader('Python.h', '<>'):
             error("Check failed for Python.h header.\n",
@@ -494,26 +517,39 @@ if main['USE_PYTHON']:
                   "package python-dev on Ubuntu and RedHat)\n"
                   "2. SCons is using a wrong C compiler. This can happen if "
                   "CC has the wrong value.\n"
-                  "CC = %s" % main['CC'])
+                  f"CC = {env['CC']}")
         py_version = conf.CheckPythonLib()
         if not py_version:
             error("Can't find a working Python installation")
-
-    marshal_env = main.Clone()
-
-    # Bare minimum environment that only includes python
-    marshal_env.Append(CCFLAGS='$MARSHAL_CCFLAGS_EXTRA')
-    marshal_env.Append(LINKFLAGS='$MARSHAL_LDFLAGS_EXTRA')
 
     # Found a working Python installation. Check if it meets minimum
     # requirements.
     ver_string = '.'.join(map(str, py_version))
     if py_version[0] < 3 or (py_version[0] == 3 and py_version[1] < 6):
-        error('Embedded python library 3.6 or newer required, found %s.' %
-              ver_string)
+        error('Embedded python library 3.6 or newer required, found '
+              f'{ver_string}.')
     elif py_version[0] > 3:
         warning('Embedded python library too new. '
-                'Python 3 expected, found %s.' % ver_string)
+                f'Python 3 expected, found {ver_string}.')
+
+if main['USE_PYTHON']:
+    config_embedded_python(main)
+    gem5py_env = main.Clone()
+else:
+    gem5py_env = main.Clone()
+    config_embedded_python(gem5py_env)
+
+# Bare minimum environment that only includes python
+gem5py_env.Append(CCFLAGS=['${GEM5PY_CCFLAGS_EXTRA}'])
+gem5py_env.Append(LINKFLAGS=['${GEM5PY_LINKFLAGS_EXTRA}'])
+
+if GetOption('gprof') and GetOption('pprof'):
+    error('Only one type of profiling should be enabled at a time')
+if GetOption('gprof'):
+    main.Append(CCFLAGS=['-g', '-pg'], LINKFLAGS=['-pg'])
+if GetOption('pprof'):
+    main.Append(CCFLAGS=['-g'],
+            LINKFLAGS=['-Wl,--no-as-needed', '-lprofiler', '-Wl,--as-needed'])
 
 main['HAVE_PKG_CONFIG'] = main.Detect('pkg-config')
 
@@ -602,9 +638,6 @@ for root, dirs, files in os.walk(ext_dir):
         main.SConscript(os.path.join(root, 'SConscript'),
                         variant_dir=os.path.join(build_root, build_dir))
 
-gdb_xml_dir = os.path.join(ext_dir, 'gdb-xml')
-Export('gdb_xml_dir')
-
 
 ########################################################################
 #
@@ -688,11 +721,9 @@ Build variables for {dir}:
     sticky_vars.Save(current_vars_file, env)
 
     env.Append(CCFLAGS='$CCFLAGS_EXTRA')
-    env.Append(LINKFLAGS='$LDFLAGS_EXTRA')
+    env.Append(LINKFLAGS='$LINKFLAGS_EXTRA')
 
-    exports=['env']
-    if main['USE_PYTHON']:
-        exports.append('marshal_env')
+    exports=['env', 'gem5py_env']
 
     # The src/SConscript file sets up the build rules in 'env' according
     # to the configured variables.  It returns a list of environments,

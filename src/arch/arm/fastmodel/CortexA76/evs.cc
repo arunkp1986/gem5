@@ -64,6 +64,13 @@ ScxEvsCortexA76<Types>::setCluster(SimObject *cluster)
 }
 
 template <class Types>
+void
+ScxEvsCortexA76<Types>::setResetAddr(int core, Addr addr, bool secure)
+{
+    this->rvbaraddr[core]->set_state(0, addr);
+}
+
+template <class Types>
 ScxEvsCortexA76<Types>::ScxEvsCortexA76(
         const sc_core::sc_module_name &mod_name, const Params &p) :
     Base(mod_name), amba(Base::amba, p.name + ".amba", -1),
@@ -84,6 +91,8 @@ ScxEvsCortexA76<Types>::ScxEvsCortexA76(
                 new SignalReceiver(csprintf("vcpumntirq[%d]", i)));
         cntpnsirq.emplace_back(
                 new SignalReceiver(csprintf("cntpnsirq[%d]", i)));
+        rvbaraddr.emplace_back(new SignalInitiator<uint64_t>(
+                    csprintf("rvbaraddr[%d]", i).c_str()));
 
         Base::cnthpirq[i].bind(cnthpirq[i]->signal_in);
         Base::cnthvirq[i].bind(cnthvirq[i]->signal_in);
@@ -94,6 +103,7 @@ ScxEvsCortexA76<Types>::ScxEvsCortexA76(
         Base::pmuirq[i].bind(pmuirq[i]->signal_in);
         Base::vcpumntirq[i].bind(vcpumntirq[i]->signal_in);
         Base::cntpnsirq[i].bind(cntpnsirq[i]->signal_in);
+        rvbaraddr[i]->bind(Base::rvbaraddr[i]);
     }
 
     clockRateControl.bind(this->clock_rate_s);

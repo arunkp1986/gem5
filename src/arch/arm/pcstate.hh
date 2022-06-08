@@ -41,7 +41,7 @@
 #ifndef __ARCH_ARM_PCSTATE_HH__
 #define __ARCH_ARM_PCSTATE_HH__
 
-#include "arch/generic/types.hh"
+#include "arch/generic/pcstate.hh"
 #include "base/bitunion.hh"
 #include "base/types.hh"
 #include "debug/Decoder.hh"
@@ -79,23 +79,18 @@ class PCState : public GenericISA::UPCState<4>
         AArch64Bit = (1 << 2)
     };
 
-    uint8_t flags;
-    uint8_t nextFlags;
-    uint8_t _itstate;
-    uint8_t _nextItstate;
-    uint8_t _size;
-    bool _illegalExec;
+    uint8_t flags = 0;
+    uint8_t nextFlags = 0;
+    uint8_t _itstate = 0;
+    uint8_t _nextItstate = 0;
+    uint8_t _size = 0;
+    bool _illegalExec = false;
 
     // Software Step flags
-    bool _debugStep;
-    bool _stepped;
+    bool _debugStep = false;
+    bool _stepped = false;
 
   public:
-    PCState() : flags(0), nextFlags(0), _itstate(0), _nextItstate(0),
-                _size(0), _illegalExec(false), _debugStep(false),
-                _stepped(false)
-    {}
-
     void
     set(Addr val)
     {
@@ -103,10 +98,33 @@ class PCState : public GenericISA::UPCState<4>
         npc(val + (thumb() ? 2 : 4));
     }
 
-    PCState(Addr val) : flags(0), nextFlags(0), _itstate(0),
-                        _nextItstate(0), _size(0), _illegalExec(false),
-                        _debugStep(false), _stepped(false)
-    { set(val); }
+    PCState(const PCState &other) : Base(other),
+        flags(other.flags), nextFlags(other.nextFlags),
+        _itstate(other._itstate), _nextItstate(other._nextItstate),
+        _size(other._size), _illegalExec(other._illegalExec),
+        _debugStep(other._debugStep), _stepped(other._stepped)
+    {}
+    PCState &operator=(const PCState &other) = default;
+
+    PCState() {}
+    explicit PCState(Addr val) { set(val); }
+
+    PCStateBase *clone() const override { return new PCState(*this); }
+
+    void
+    update(const PCStateBase &other) override
+    {
+        Base::update(other);
+        auto &pcstate = other.as<PCState>();
+        flags = pcstate.flags;
+        nextFlags = pcstate.nextFlags;
+        _itstate = pcstate._itstate;
+        _nextItstate = pcstate._nextItstate;
+        _size = pcstate._size;
+        _illegalExec = pcstate._illegalExec;
+        _debugStep = pcstate._debugStep;
+        _stepped = pcstate._stepped;
+    }
 
     bool
     illegalExec() const
@@ -178,7 +196,7 @@ class PCState : public GenericISA::UPCState<4>
     uint8_t size() const { return _size; }
 
     bool
-    branching() const
+    branching() const override
     {
         return ((this->pc() + this->size()) != this->npc());
     }
@@ -270,7 +288,7 @@ class PCState : public GenericISA::UPCState<4>
     }
 
     void
-    advance()
+    advance() override
     {
         Base::advance();
         flags = nextFlags;
@@ -373,21 +391,16 @@ class PCState : public GenericISA::UPCState<4>
     }
 
     bool
-    operator == (const PCState &opc) const
+    equals(const PCStateBase &other) const override
     {
-        return Base::operator == (opc) &&
+        auto &opc = other.as<PCState>();
+        return Base::equals(other) &&
             flags == opc.flags && nextFlags == opc.nextFlags &&
             _itstate == opc._itstate &&
             _nextItstate == opc._nextItstate &&
             _illegalExec == opc._illegalExec &&
             _debugStep == opc._debugStep &&
             _stepped == opc._stepped;
-    }
-
-    bool
-    operator != (const PCState &opc) const
-    {
-        return !(*this == opc);
     }
 
     void

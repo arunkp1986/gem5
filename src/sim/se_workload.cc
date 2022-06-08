@@ -30,17 +30,51 @@
 #include "cpu/thread_context.hh"
 #include "params/SEWorkload.hh"
 #include "sim/process.hh"
+#include "sim/system.hh"
 
 namespace gem5
 {
 
-SEWorkload::SEWorkload(const Params &p) : Workload(p)
+SEWorkload::SEWorkload(const Params &p, Addr page_shift) :
+    Workload(p), memPools(page_shift)
 {}
+
+void
+SEWorkload::setSystem(System *sys)
+{
+    Workload::setSystem(sys);
+
+    AddrRangeList memories = sys->getPhysMem().getConfAddrRanges();
+    const auto &m5op_range = sys->m5opRange();
+
+    if (m5op_range.valid())
+        memories -= m5op_range;
+
+    memPools.populate(memories);
+}
 
 void
 SEWorkload::syscall(ThreadContext *tc)
 {
     tc->getProcessPtr()->syscall(tc);
+}
+
+Addr
+SEWorkload::allocPhysPages(int npages, int pool_id)
+{
+    return memPools.allocPhysPages(npages, pool_id);
+}
+
+Addr
+SEWorkload::memSize(int pool_id) const
+{
+    return memPools.memSize(pool_id);
+}
+
+Addr
+SEWorkload::freeMemSize(int pool_id) const
+{
+    return memPools.freeMemSize(pool_id);
 }
 
 } // namespace gem5

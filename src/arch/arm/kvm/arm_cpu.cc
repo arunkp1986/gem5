@@ -414,7 +414,8 @@ const ArmKvmCPU::RegIndexVector &
 ArmKvmCPU::getRegList() const
 {
     if (_regIndexList.size() == 0) {
-        std::unique_ptr<struct kvm_reg_list> regs;
+        std::unique_ptr<struct kvm_reg_list, void(*)(void *p)>
+            regs(nullptr, [](void *p) { operator delete(p); });
         uint64_t i = 1;
 
         do {
@@ -668,8 +669,8 @@ ArmKvmCPU::updateKvmStateCore()
         setOneReg(ri->id, value);
     }
 
-    DPRINTF(KvmContext, "kvm(PC) := 0x%x\n", tc->instAddr());
-    setOneReg(REG_CORE32(usr_regs.ARM_pc), tc->instAddr());
+    DPRINTF(KvmContext, "kvm(PC) := 0x%x\n", tc->pcState().instAddr());
+    setOneReg(REG_CORE32(usr_regs.ARM_pc), tc->pcState().instAddr());
 
     for (const KvmCoreMiscRegInfo *ri(kvmCoreMiscRegs);
          ri->idx != NUM_MISCREGS; ++ri) {
@@ -819,7 +820,7 @@ ArmKvmCPU::updateTCStateCore()
 
     // We update the PC state after we have updated the CPSR the
     // contents of the CPSR affects how the npc is updated.
-    PCState pc = tc->pcState();
+    PCState pc = tc->pcState().as<PCState>();
     pc.set(getOneRegU32(REG_CORE32(usr_regs.ARM_pc)));
     tc->pcState(pc);
 

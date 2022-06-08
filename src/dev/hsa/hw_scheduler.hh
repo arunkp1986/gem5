@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -39,6 +37,7 @@
 
 #include "base/types.hh"
 #include "dev/hsa/hsa_packet_processor.hh"
+#include "enums/GfxVersion.hh"
 #include "sim/eventq.hh"
 
 // We allocate one PIO page for doorbells and each
@@ -59,7 +58,8 @@ class HWScheduler
     void registerNewQueue(uint64_t hostReadIndexPointer,
                           uint64_t basePointer,
                           uint64_t queue_id,
-                          uint32_t size, int doorbellSize);
+                          uint32_t size, int doorbellSize,
+                          GfxVersion gfxVersion);
     void unregisterQueue(uint64_t queue_id, int doorbellSize);
     void wakeup();
     void schedWakeup();

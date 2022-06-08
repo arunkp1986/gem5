@@ -42,7 +42,7 @@
 #ifndef __CPU_CHECKER_THREAD_CONTEXT_HH__
 #define __CPU_CHECKER_THREAD_CONTEXT_HH__
 
-#include "arch/pcstate.hh"
+#include "arch/generic/pcstate.hh"
 #include "config/the_isa.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/simple_thread.hh"
@@ -90,7 +90,7 @@ class CheckerThreadContext : public ThreadContext
     bool
     schedule(PCEvent *e) override
     {
-        GEM5_VAR_USED bool check_ret = checkerTC->schedule(e);
+        [[maybe_unused]] bool check_ret = checkerTC->schedule(e);
         bool actual_ret = actualTC->schedule(e);
         assert(actual_ret == check_ret);
         return actual_ret;
@@ -99,7 +99,7 @@ class CheckerThreadContext : public ThreadContext
     bool
     remove(PCEvent *e) override
     {
-        GEM5_VAR_USED bool check_ret = checkerTC->remove(e);
+        [[maybe_unused]] bool check_ret = checkerTC->remove(e);
         bool actual_ret = actualTC->remove(e);
         assert(actual_ret == check_ret);
         return actual_ret;
@@ -155,7 +155,7 @@ class CheckerThreadContext : public ThreadContext
 
     BaseISA *getIsaPtr() override { return actualTC->getIsaPtr(); }
 
-    TheISA::Decoder *
+    InstDecoder *
     getDecoderPtr() override
     {
         return actualTC->getDecoderPtr();
@@ -166,18 +166,6 @@ class CheckerThreadContext : public ThreadContext
     Process *getProcessPtr() override { return actualTC->getProcessPtr(); }
 
     void setProcessPtr(Process *p) override { actualTC->setProcessPtr(p); }
-
-    PortProxy &
-    getVirtProxy() override
-    {
-        return actualTC->getVirtProxy();
-    }
-
-    void
-    initMemProxies(ThreadContext *tc) override
-    {
-        actualTC->initMemProxies(tc);
-    }
 
     void
     connectMemPorts(ThreadContext *tc)
@@ -265,7 +253,7 @@ class CheckerThreadContext : public ThreadContext
         return actualTC->getWritableVecReg(reg);
     }
 
-    const TheISA::VecElem &
+    RegVal
     readVecElem(const RegId& reg) const override
     {
         return actualTC->readVecElem(reg);
@@ -311,7 +299,7 @@ class CheckerThreadContext : public ThreadContext
     }
 
     void
-    setVecElem(const RegId& reg, const TheISA::VecElem& val) override
+    setVecElem(const RegId& reg, RegVal val) override
     {
         actualTC->setVecElem(reg, val);
         checkerTC->setVecElem(reg, val);
@@ -333,11 +321,11 @@ class CheckerThreadContext : public ThreadContext
     }
 
     /** Reads this thread's PC state. */
-    TheISA::PCState pcState() const override { return actualTC->pcState(); }
+    const PCStateBase &pcState() const override { return actualTC->pcState(); }
 
     /** Sets this thread's PC state. */
     void
-    pcState(const TheISA::PCState &val) override
+    pcState(const PCStateBase &val) override
     {
         DPRINTF(Checker, "Changing PC to %s, old PC %s\n",
                          val, checkerTC->pcState());
@@ -347,26 +335,10 @@ class CheckerThreadContext : public ThreadContext
     }
 
     void
-    setNPC(Addr val)
-    {
-        checkerTC->setNPC(val);
-        actualTC->setNPC(val);
-    }
-
-    void
-    pcStateNoRecord(const TheISA::PCState &val) override
+    pcStateNoRecord(const PCStateBase &val) override
     {
         return actualTC->pcState(val);
     }
-
-    /** Reads this thread's PC. */
-    Addr instAddr() const override { return actualTC->instAddr(); }
-
-    /** Reads this thread's next PC. */
-    Addr nextInstAddr() const override { return actualTC->nextInstAddr(); }
-
-    /** Reads this thread's next PC. */
-    MicroPC microPC() const override { return actualTC->microPC(); }
 
     RegVal
     readMiscRegNoEffect(RegIndex misc_reg) const override
@@ -461,7 +433,7 @@ class CheckerThreadContext : public ThreadContext
         actualTC->setVecRegFlat(idx, val);
     }
 
-    const TheISA::VecElem &
+    RegVal
     readVecElemFlat(RegIndex idx, const ElemIndex& elem_idx) const override
     {
         return actualTC->readVecElemFlat(idx, elem_idx);
@@ -469,7 +441,7 @@ class CheckerThreadContext : public ThreadContext
 
     void
     setVecElemFlat(RegIndex idx, const ElemIndex& elem_idx,
-            const TheISA::VecElem& val) override
+            RegVal val) override
     {
         actualTC->setVecElemFlat(idx, elem_idx, val);
     }

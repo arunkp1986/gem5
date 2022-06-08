@@ -42,7 +42,9 @@
 #define __ARCH_ARM_MACROMEM_HH__
 
 #include "arch/arm/insts/pred_inst.hh"
+#include "arch/arm/pcstate.hh"
 #include "arch/arm/tlb.hh"
+#include "cpu/thread_context.hh"
 
 namespace gem5
 {
@@ -75,15 +77,30 @@ class MicroOp : public PredOp
 
   public:
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop]) {
-            pcState.uEnd();
+            apc.uEnd();
         } else if (flags[IsMicroop]) {
-            pcState.uAdvance();
+            apc.uAdvance();
         } else {
-            pcState.advance();
+            apc.advance();
         }
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop]) {
+            pc.uEnd();
+        } else if (flags[IsMicroop]) {
+            pc.uAdvance();
+        } else {
+            pc.advance();
+        }
+        tc->pcState(pc);
     }
 };
 
@@ -96,15 +113,30 @@ class MicroOpX : public ArmStaticInst
 
   public:
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop]) {
-            pcState.uEnd();
+            apc.uEnd();
         } else if (flags[IsMicroop]) {
-            pcState.uAdvance();
+            apc.uAdvance();
         } else {
-            pcState.advance();
+            apc.advance();
         }
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop]) {
+            pc.uEnd();
+        } else if (flags[IsMicroop]) {
+            pc.uAdvance();
+        } else {
+            pc.advance();
+        }
+        tc->pcState(pc);
     }
 };
 
@@ -395,7 +427,7 @@ class MicroMemOp : public MicroIntImmOp
     MicroMemOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
                RegIndex _ura, RegIndex _urb, bool _up, uint8_t _imm)
             : MicroIntImmOp(mnem, machInst, __opClass, _ura, _urb, _imm),
-              up(_up), memAccessFlags(TLB::AlignWord)
+              up(_up), memAccessFlags(MMU::AlignWord)
     {
     }
 
@@ -416,7 +448,7 @@ class MicroMemPairOp : public MicroOp
             bool _up, uint8_t _imm)
         : MicroOp(mnem, machInst, __opClass),
         dest(_dreg1), dest2(_dreg2), urb(_base), up(_up), imm(_imm),
-        memAccessFlags(TLB::AlignWord)
+        memAccessFlags(MMU::AlignWord)
     {
     }
 

@@ -68,6 +68,7 @@ class EmuLinux : public SEWorkload
     }
 
     loader::Arch getArch() const override { return loader::X86_64; }
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
 
     void syscall(ThreadContext *tc) override;
     void event(ThreadContext *tc) override;
@@ -99,8 +100,8 @@ namespace guest_abi
 
 template <typename Arg>
 struct Argument<X86ISA::EmuLinux::SyscallABI32, Arg,
-    typename std::enable_if_t<std::is_integral<Arg>::value &&
-        X86ISA::EmuLinux::SyscallABI32::IsWide<Arg>::value>>
+    typename std::enable_if_t<std::is_integral_v<Arg> &&
+        X86ISA::EmuLinux::SyscallABI32::IsWideV<Arg>>>
 {
     using ABI = X86ISA::EmuLinux::SyscallABI32;
 

@@ -42,6 +42,7 @@
 
 #include "base/logging.hh"
 #include "cpu/null_static_inst.hh"
+#include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 #include "sim/faults.hh"
 
@@ -60,9 +61,9 @@ class M5DebugFault : public FaultBase
     advancePC(ThreadContext *tc, const StaticInstPtr &inst)
     {
         if (inst) {
-            auto pc = tc->pcState();
-            inst->advancePC(pc);
-            tc->pcState(pc);
+            std::unique_ptr<PCStateBase> pc(tc->pcState().clone());
+            inst->advancePC(*pc);
+            tc->pcState(*pc);
         }
     }
 

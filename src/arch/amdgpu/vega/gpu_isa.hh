@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -57,8 +55,8 @@ namespace VegaISA
         template<typename T> T
         readConstVal(int opIdx) const
         {
-            panic_if(!std::is_integral<T>::value, "Constant values must "
-                     "be an integer.\n");
+            panic_if(!std::is_integral_v<T>,
+                    "Constant values must be an integer.");
             T val(0);
 
             if (isPosConstVal(opIdx)) {

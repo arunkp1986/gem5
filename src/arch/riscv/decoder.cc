@@ -42,13 +42,11 @@ void Decoder::reset()
 {
     aligned = true;
     mid = false;
-    more = true;
     emi = 0;
-    instDone = false;
 }
 
 void
-Decoder::moreBytes(const PCState &pc, Addr fetchPC)
+Decoder::moreBytes(const PCStateBase &pc, Addr fetchPC)
 {
     // The MSB of the upper and lower halves of a machine instruction.
     constexpr size_t max_bit = sizeof(machInst) * 8 - 1;
@@ -58,24 +56,24 @@ Decoder::moreBytes(const PCState &pc, Addr fetchPC)
     DPRINTF(Decode, "Requesting bytes 0x%08x from address %#x\n", inst,
             fetchPC);
 
-    bool aligned = pc.pc() % sizeof(machInst) == 0;
+    bool aligned = pc.instAddr() % sizeof(machInst) == 0;
     if (aligned) {
         emi = inst;
         if (compressed(emi))
             emi = bits(emi, mid_bit, 0);
-        more = !compressed(emi);
+        outOfBytes = !compressed(emi);
         instDone = true;
     } else {
         if (mid) {
             assert(bits(emi, max_bit, mid_bit + 1) == 0);
             replaceBits(emi, max_bit, mid_bit + 1, inst);
             mid = false;
-            more = false;
+            outOfBytes = false;
             instDone = true;
         } else {
             emi = bits(inst, max_bit, mid_bit + 1);
             mid = !compressed(emi);
-            more = true;
+            outOfBytes = true;
             instDone = compressed(emi);
         }
     }
@@ -97,19 +95,23 @@ Decoder::decode(ExtMachInst mach_inst, Addr addr)
 }
 
 StaticInstPtr
-Decoder::decode(RiscvISA::PCState &nextPC)
+Decoder::decode(PCStateBase &_next_pc)
 {
     if (!instDone)
         return nullptr;
     instDone = false;
 
+    auto &next_pc = _next_pc.as<PCState>();
+
     if (compressed(emi)) {
-        nextPC.npc(nextPC.instAddr() + sizeof(machInst) / 2);
+        next_pc.npc(next_pc.instAddr() + sizeof(machInst) / 2);
+        next_pc.compressed(true);
     } else {
-        nextPC.npc(nextPC.instAddr() + sizeof(machInst));
+        next_pc.npc(next_pc.instAddr() + sizeof(machInst));
+        next_pc.compressed(false);
     }
 
-    return decode(emi, nextPC.instAddr());
+    return decode(emi, next_pc.instAddr());
 }
 
 } // namespace RiscvISA

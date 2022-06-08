@@ -88,6 +88,7 @@ def get_processes(args):
         process = Process(pid = 100 + idx)
         process.executable = wrkld
         process.cwd = os.getcwd()
+        process.gid = os.getgid()
 
         if args.env:
             with open(args.env, 'r') as f:
@@ -256,7 +257,7 @@ if args.ruby:
 else:
     MemClass = Simulation.setMemClass(args)
     system.membus = SystemXBar()
-    system.system_port = system.membus.slave
+    system.system_port = system.membus.cpu_side_ports
     CacheConfig.config_cache(args, system)
     MemConfig.config_mem(args, system)
     config_filesystem(system, args)

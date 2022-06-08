@@ -51,12 +51,6 @@ namespace gem5
 namespace o3
 {
 
-PortProxy&
-ThreadContext::getVirtProxy()
-{
-    return thread->getVirtProxy();
-}
-
 void
 ThreadContext::takeOverFrom(gem5::ThreadContext *old_context)
 {
@@ -64,8 +58,8 @@ ThreadContext::takeOverFrom(gem5::ThreadContext *old_context)
 
     getIsaPtr()->takeOverFrom(this, old_context);
 
-    TheISA::Decoder *newDecoder = getDecoderPtr();
-    TheISA::Decoder *oldDecoder = old_context->getDecoderPtr();
+    InstDecoder *newDecoder = getDecoderPtr();
+    InstDecoder *oldDecoder = old_context->getDecoderPtr();
     newDecoder->takeOverFrom(oldDecoder);
 
     thread->noSquashFromTC = false;
@@ -143,9 +137,6 @@ ThreadContext::readLastSuspend()
 void
 ThreadContext::copyArchRegs(gem5::ThreadContext *tc)
 {
-    // Set vector renaming mode before copying registers
-    cpu->vecRenameMode(tc->getIsaPtr()->vecRegRenameMode(tc));
-
     // Prevent squashing
     thread->noSquashFromTC = true;
     getIsaPtr()->copyRegsFrom(tc);
@@ -182,7 +173,7 @@ ThreadContext::getWritableVecRegFlat(RegIndex reg_id)
     return cpu->getWritableArchVecReg(reg_id, thread->threadId());
 }
 
-const TheISA::VecElem&
+RegVal
 ThreadContext::readVecElemFlat(RegIndex idx, const ElemIndex& elemIndex) const
 {
     return cpu->readArchVecElem(idx, elemIndex, thread->threadId());
@@ -233,7 +224,7 @@ ThreadContext::setVecRegFlat(
 
 void
 ThreadContext::setVecElemFlat(RegIndex idx,
-        const ElemIndex& elemIndex, const TheISA::VecElem& val)
+        const ElemIndex& elemIndex, RegVal val)
 {
     cpu->setArchVecElem(idx, elemIndex, val, thread->threadId());
     conditionalSquash();
@@ -257,7 +248,7 @@ ThreadContext::setCCRegFlat(RegIndex reg_idx, RegVal val)
 }
 
 void
-ThreadContext::pcState(const TheISA::PCState &val)
+ThreadContext::pcState(const PCStateBase &val)
 {
     cpu->pcState(val, thread->threadId());
 
@@ -265,7 +256,7 @@ ThreadContext::pcState(const TheISA::PCState &val)
 }
 
 void
-ThreadContext::pcStateNoRecord(const TheISA::PCState &val)
+ThreadContext::pcStateNoRecord(const PCStateBase &val)
 {
     cpu->pcState(val, thread->threadId());
 

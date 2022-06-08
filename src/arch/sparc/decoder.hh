@@ -34,6 +34,7 @@
 #include "arch/sparc/types.hh"
 #include "cpu/static_inst.hh"
 #include "debug/Decode.hh"
+#include "params/SparcDecoder.hh"
 
 namespace gem5
 {
@@ -48,25 +49,16 @@ class Decoder : public InstDecoder
     // The extended machine instruction being generated
     ExtMachInst emi;
     uint32_t machInst;
-    bool instDone;
     RegVal asi;
 
   public:
-    Decoder(ISA* isa=nullptr) : InstDecoder(&machInst), instDone(false), asi(0)
+    Decoder(const SparcDecoderParams &p) : InstDecoder(p, &machInst), asi(0)
     {}
-
-    void process() {}
-
-    void
-    reset()
-    {
-        instDone = false;
-    }
 
     // Use this to give data to the predecoder. This should be used
     // when there is control flow.
     void
-    moreBytes(const PCState &pc, Addr fetchPC)
+    moreBytes(const PCStateBase &pc, Addr fetchPC) override
     {
         emi = betoh(machInst);
         // The I bit, bit 13, is used to figure out where the ASI
@@ -83,25 +75,11 @@ class Decoder : public InstDecoder
         instDone = true;
     }
 
-    bool
-    needMoreBytes()
-    {
-        return true;
-    }
-
-    bool
-    instReady()
-    {
-        return instDone;
-    }
-
     void
     setContext(RegVal _asi)
     {
         asi = _asi;
     }
-
-    void takeOverFrom(Decoder *old) {}
 
   protected:
     /// A cache of decoded instruction objects.
@@ -124,12 +102,12 @@ class Decoder : public InstDecoder
 
   public:
     StaticInstPtr
-    decode(SparcISA::PCState &nextPC)
+    decode(PCStateBase &next_pc) override
     {
         if (!instDone)
             return NULL;
         instDone = false;
-        return decode(emi, nextPC.instAddr());
+        return decode(emi, next_pc.instAddr());
     }
 };
 

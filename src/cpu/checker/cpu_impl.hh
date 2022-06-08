@@ -69,14 +69,12 @@ Checker<DynInstPtr>::advancePC(const Fault &fault)
     if (fault != NoFault) {
         curMacroStaticInst = nullStaticInstPtr;
         fault->invoke(tc, curStaticInst);
-        thread->decoder.reset();
+        thread->decoder->reset();
     } else {
         if (curStaticInst) {
             if (curStaticInst->isLastMicroop())
                 curMacroStaticInst = nullStaticInstPtr;
-            TheISA::PCState pcState = thread->pcState();
-            curStaticInst->advancePC(pcState);
-            thread->pcState(pcState);
+            curStaticInst->advancePC(thread);
             DPRINTF(Checker, "Advancing PC to %s.\n", thread->pcState());
         }
     }
@@ -113,7 +111,7 @@ Checker<DynInstPtr>::handlePendingInt()
               "a non-interuptable instruction!", curTick());
     }
     boundaryInst = NULL;
-    thread->decoder.reset();
+    thread->decoder->reset();
     curMacroStaticInst = nullStaticInstPtr;
 }
 
@@ -184,7 +182,7 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
     inst = NULL;
 
     auto &decoder = thread->decoder;
-    const Addr pc_mask = decoder.pcMask();
+    const Addr pc_mask = decoder->pcMask();
 
     // Try to check all instructions that are completed, ending if we
     // run out of instructions to check or if an instruction is not
@@ -213,12 +211,12 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
             DPRINTF(Checker, "Changed PC recently to %s\n",
                     thread->pcState());
             if (willChangePC) {
-                if (newPCState == thread->pcState()) {
+                if (*newPCState == thread->pcState()) {
                     DPRINTF(Checker, "Changed PC matches expected PC\n");
                 } else {
                     warn("%lli: Changed PC does not match expected PC, "
                          "changed: %s, expected: %s",
-                         curTick(), thread->pcState(), newPCState);
+                         curTick(), thread->pcState(), *newPCState);
                     CheckerCPU::handleError();
                 }
                 willChangePC = false;
@@ -230,19 +228,19 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
         uint64_t fetchOffset = 0;
         bool fetchDone = false;
         while (!fetchDone) {
-            Addr fetch_PC = thread->instAddr();
+            Addr fetch_PC = thread->pcState().instAddr();
             fetch_PC = (fetch_PC & pc_mask) + fetchOffset;
 
             // If not in the middle of a macro instruction
             if (!curMacroStaticInst) {
                 // set up memory request for instruction fetch
                 auto mem_req = std::make_shared<Request>(
-                    fetch_PC, decoder.moreBytesSize(), 0, requestorId,
+                    fetch_PC, decoder->moreBytesSize(), 0, requestorId,
                     fetch_PC, thread->contextId());
 
-                mem_req->setVirt(fetch_PC, decoder.moreBytesSize(),
+                mem_req->setVirt(fetch_PC, decoder->moreBytesSize(),
                                  Request::INST_FETCH, requestorId,
-                                 thread->instAddr());
+                                 thread->pcState().instAddr());
 
                 fault = mmu->translateFunctional(
                     mem_req, tc, BaseMMU::Execute);
@@ -274,7 +272,7 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
                 } else {
                     PacketPtr pkt = new Packet(mem_req, MemCmd::ReadReq);
 
-                    pkt->dataStatic(decoder.moreBytesPtr());
+                    pkt->dataStatic(decoder->moreBytesPtr());
                     icachePort->sendFunctional(pkt);
 
                     delete pkt;
@@ -282,32 +280,33 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
             }
 
             if (fault == NoFault) {
-                TheISA::PCState pcState = thread->pcState();
+                std::unique_ptr<PCStateBase> pc_state(
+                        thread->pcState().clone());
 
-                if (isRomMicroPC(pcState.microPC())) {
+                if (isRomMicroPC(pc_state->microPC())) {
                     fetchDone = true;
-                    curStaticInst = decoder.fetchRomMicroop(
-                            pcState.microPC(), nullptr);
+                    curStaticInst = decoder->fetchRomMicroop(
+                            pc_state->microPC(), nullptr);
                 } else if (!curMacroStaticInst) {
                     //We're not in the middle of a macro instruction
                     StaticInstPtr instPtr = nullptr;
 
                     //Predecode, ie bundle up an ExtMachInst
                     //If more fetch data is needed, pass it in.
-                    Addr fetchPC =
-                        (pcState.instAddr() & pc_mask) + fetchOffset;
-                    decoder.moreBytes(pcState, fetchPC);
+                    Addr fetch_pc =
+                        (pc_state->instAddr() & pc_mask) + fetchOffset;
+                    decoder->moreBytes(*pc_state, fetch_pc);
 
                     //If an instruction is ready, decode it.
                     //Otherwise, we'll have to fetch beyond the
                     //memory chunk at the current pc.
-                    if (decoder.instReady()) {
+                    if (decoder->instReady()) {
                         fetchDone = true;
-                        instPtr = decoder.decode(pcState);
-                        thread->pcState(pcState);
+                        instPtr = decoder->decode(*pc_state);
+                        thread->pcState(*pc_state);
                     } else {
                         fetchDone = false;
-                        fetchOffset += decoder.moreBytesSize();
+                        fetchOffset += decoder->moreBytesSize();
                     }
 
                     //If we decoded an instruction and it's microcoded,
@@ -315,20 +314,20 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
                     if (instPtr && instPtr->isMacroop()) {
                         curMacroStaticInst = instPtr;
                         curStaticInst =
-                            instPtr->fetchMicroop(pcState.microPC());
+                            instPtr->fetchMicroop(pc_state->microPC());
                     } else {
                         curStaticInst = instPtr;
                     }
                 } else {
                     // Read the next micro op from the macro-op
                     curStaticInst =
-                        curMacroStaticInst->fetchMicroop(pcState.microPC());
+                        curMacroStaticInst->fetchMicroop(pc_state->microPC());
                     fetchDone = true;
                 }
             }
         }
         // reset decoder on Checker
-        decoder.reset();
+        decoder->reset();
 
         // Check Checker and CPU get same instruction, and record
         // any faults the CPU may have had.
@@ -386,8 +385,8 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
             if (FullSystem) {
                 fault->invoke(tc, curStaticInst);
                 willChangePC = true;
-                newPCState = thread->pcState();
-                DPRINTF(Checker, "Fault, PC is now %s\n", newPCState);
+                set(newPCState, thread->pcState());
+                DPRINTF(Checker, "Fault, PC is now %s\n", *newPCState);
                 curMacroStaticInst = nullStaticInstPtr;
             }
         } else {
@@ -401,14 +400,14 @@ Checker<DynInstPtr>::verify(const DynInstPtr &completed_inst)
             Addr oldpc;
             int count = 0;
             do {
-                oldpc = thread->instAddr();
+                oldpc = thread->pcState().instAddr();
                 thread->pcEventQueue.service(oldpc, tc);
                 count++;
-            } while (oldpc != thread->instAddr());
+            } while (oldpc != thread->pcState().instAddr());
             if (count > 1) {
                 willChangePC = true;
-                newPCState = thread->pcState();
-                DPRINTF(Checker, "PC Event, PC is now %s\n", newPCState);
+                set(newPCState, thread->pcState());
+                DPRINTF(Checker, "PC Event, PC is now %s\n", *newPCState);
             }
         }
 
@@ -445,7 +444,7 @@ template <class DynInstPtr>
 void
 Checker<DynInstPtr>::validateInst(const DynInstPtr &inst)
 {
-    if (inst->instAddr() != thread->instAddr()) {
+    if (inst->pcState().instAddr() != thread->pcState().instAddr()) {
         warn("%lli: PCs do not match! Inst: %s, checker: %s",
              curTick(), inst->pcState(), thread->pcState());
         if (changedPC) {
@@ -471,28 +470,23 @@ Checker<DynInstPtr>::validateExecution(const DynInstPtr &inst)
     int idx = -1;
     bool result_mismatch = false;
     bool scalar_mismatch = false;
-    bool vector_mismatch = false;
 
     if (inst->isUnverifiable()) {
         // Unverifiable instructions assume they were executed
         // properly by the CPU. Grab the result from the
         // instruction and write it to the register.
-        copyResult(inst, InstResult(0ul, InstResult::ResultType::Scalar), idx);
+        copyResult(inst, InstResult((RegVal)0), idx);
     } else if (inst->numDestRegs() > 0 && !result.empty()) {
         DPRINTF(Checker, "Dest regs %d, number of checker dest regs %d\n",
                          inst->numDestRegs(), result.size());
         for (int i = 0; i < inst->numDestRegs() && !result.empty(); i++) {
             checker_val = result.front();
             result.pop();
-            inst_val = inst->popResult(
-                    InstResult(0ul, InstResult::ResultType::Scalar));
+            inst_val = inst->popResult(InstResult((RegVal)0));
             if (checker_val != inst_val) {
                 result_mismatch = true;
                 idx = i;
-                scalar_mismatch = checker_val.isScalar();
-                vector_mismatch = checker_val.isVector();
-                panic_if(!(scalar_mismatch || vector_mismatch),
-                        "Unknown type of result\n");
+                scalar_mismatch = checker_val.is<RegVal>();
             }
         }
     } // Checker CPU checks all the saved results in the dyninst passed by
@@ -505,8 +499,8 @@ Checker<DynInstPtr>::validateExecution(const DynInstPtr &inst)
         if (scalar_mismatch) {
             warn("%lli: Instruction results (%i) do not match! (Values may"
                  " not actually be integers) Inst: %#x, checker: %#x",
-                 curTick(), idx, inst_val.asIntegerNoAssert(),
-                 checker_val.asInteger());
+                 curTick(), idx, inst_val.asNoAssert<RegVal>(),
+                 checker_val.as<RegVal>());
         }
 
         // It's useful to verify load values from memory, but in MP
@@ -523,10 +517,9 @@ Checker<DynInstPtr>::validateExecution(const DynInstPtr &inst)
         }
     }
 
-    if (inst->nextInstAddr() != thread->nextInstAddr()) {
-        warn("%lli: Instruction next PCs do not match! Inst: %#x, "
-             "checker: %#x",
-             curTick(), inst->nextInstAddr(), thread->nextInstAddr());
+    if (inst->pcState() != thread->pcState()) {
+        warn("%lli: Instruction PCs do not match! Inst: %s, checker: %s",
+             curTick(), inst->pcState(), thread->pcState());
         handleError(inst);
     }
 
@@ -562,7 +555,8 @@ Checker<DynInstPtr>::validateState()
     if (updateThisCycle) {
         // Change this back to warn if divergences end up being false positives
         panic("%lli: Instruction PC %#x results didn't match up, copying all "
-             "registers from main CPU", curTick(), unverifiedInst->instAddr());
+             "registers from main CPU", curTick(),
+             unverifiedInst->pcState().instAddr());
 
         // Terribly convoluted way to make sure O3 model does not implode
         bool no_squash_from_TC = unverifiedInst->thread->noSquashFromTC;
@@ -591,29 +585,22 @@ Checker<DynInstPtr>::copyResult(
         const RegId& idx = inst->destRegIdx(start_idx);
         switch (idx.classValue()) {
           case IntRegClass:
-            panic_if(!mismatch_val.isScalar(), "Unexpected type of result");
-            thread->setIntReg(idx.index(), mismatch_val.asInteger());
+            thread->setIntReg(idx.index(), mismatch_val.as<RegVal>());
             break;
           case FloatRegClass:
-            panic_if(!mismatch_val.isScalar(), "Unexpected type of result");
-            thread->setFloatReg(idx.index(), mismatch_val.asInteger());
+            thread->setFloatReg(idx.index(), mismatch_val.as<RegVal>());
             break;
           case VecRegClass:
-            panic_if(!mismatch_val.isVector(), "Unexpected type of result");
-            thread->setVecReg(idx, mismatch_val.asVector());
+            thread->setVecReg(idx, mismatch_val.as<TheISA::VecRegContainer>());
             break;
           case VecElemClass:
-            panic_if(!mismatch_val.isVecElem(),
-                     "Unexpected type of result");
-            thread->setVecElem(idx, mismatch_val.asVectorElem());
+            thread->setVecElem(idx, mismatch_val.as<RegVal>());
             break;
           case CCRegClass:
-            panic_if(!mismatch_val.isScalar(), "Unexpected type of result");
-            thread->setCCReg(idx.index(), mismatch_val.asInteger());
+            thread->setCCReg(idx.index(), mismatch_val.as<RegVal>());
             break;
           case MiscRegClass:
-            panic_if(!mismatch_val.isScalar(), "Unexpected type of result");
-            thread->setMiscReg(idx.index(), mismatch_val.asInteger());
+            thread->setMiscReg(idx.index(), mismatch_val.as<RegVal>());
             break;
           default:
             panic("Unknown register class: %d", (int)idx.classValue());
@@ -626,27 +613,21 @@ Checker<DynInstPtr>::copyResult(
         res = inst->popResult();
         switch (idx.classValue()) {
           case IntRegClass:
-            panic_if(!res.isScalar(), "Unexpected type of result");
-            thread->setIntReg(idx.index(), res.asInteger());
+            thread->setIntReg(idx.index(), res.as<RegVal>());
             break;
           case FloatRegClass:
-            panic_if(!res.isScalar(), "Unexpected type of result");
-            thread->setFloatReg(idx.index(), res.asInteger());
+            thread->setFloatReg(idx.index(), res.as<RegVal>());
             break;
           case VecRegClass:
-            panic_if(!res.isVector(), "Unexpected type of result");
-            thread->setVecReg(idx, res.asVector());
+            thread->setVecReg(idx, res.as<TheISA::VecRegContainer>());
             break;
           case VecElemClass:
-            panic_if(!res.isVecElem(), "Unexpected type of result");
-            thread->setVecElem(idx, res.asVectorElem());
+            thread->setVecElem(idx, res.as<RegVal>());
             break;
           case CCRegClass:
-            panic_if(!res.isScalar(), "Unexpected type of result");
-            thread->setCCReg(idx.index(), res.asInteger());
+            thread->setCCReg(idx.index(), res.as<RegVal>());
             break;
           case MiscRegClass:
-            panic_if(res.isValid(), "MiscReg expecting invalid result");
             // Try to get the proper misc register index for ARM here...
             thread->setMiscReg(idx.index(), 0);
             break;
@@ -662,10 +643,9 @@ void
 Checker<DynInstPtr>::dumpAndExit(const DynInstPtr &inst)
 {
     cprintf("Error detected, instruction information:\n");
-    cprintf("PC:%s, nextPC:%#x\n[sn:%lli]\n[tid:%i]\n"
+    cprintf("PC:%s\n[sn:%lli]\n[tid:%i]\n"
             "Completed:%i\n",
             inst->pcState(),
-            inst->nextInstAddr(),
             inst->seqNum,
             inst->threadNumber,
             inst->isCompleted());

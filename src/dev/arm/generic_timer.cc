@@ -39,6 +39,7 @@
 
 #include <cmath>
 
+#include "arch/arm/page_size.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/utility.hh"
 #include "base/logging.hh"
@@ -729,6 +730,7 @@ GenericTimer::CoreTimers::CoreTimers(GenericTimer &_parent,
     ArmInterruptPin *_irqVirt, ArmInterruptPin *_irqHyp)
       : parent(_parent),
         cntfrq(parent.params().cntfrq),
+        cntkctl(0), cnthctl(0),
         threadContext(system.threads[cpu]),
         irqPhysS(_irqPhysS),
         irqPhysNS(_irqPhysNS),
@@ -1285,7 +1287,7 @@ GenericTimerMem::validateFrameRange(const AddrRange &range)
 bool
 GenericTimerMem::validateAccessPerm(ArmSystem &sys, bool is_sec)
 {
-    return !sys.haveSecurity() || is_sec;
+    return !sys.has(ArmExtension::SECURITY) || is_sec;
 }
 
 AddrRangeList

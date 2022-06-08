@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -87,7 +85,8 @@ void
 HWScheduler::registerNewQueue(uint64_t hostReadIndexPointer,
                               uint64_t basePointer,
                               uint64_t queue_id,
-                              uint32_t size, int doorbellSize)
+                              uint32_t size, int doorbellSize,
+                              GfxVersion gfxVersion)
 {
     assert(queue_id < MAX_ACTIVE_QUEUES);
     // Map queue ID to doorbell.
@@ -108,7 +107,7 @@ HWScheduler::registerNewQueue(uint64_t hostReadIndexPointer,
 
     HSAQueueDescriptor* q_desc =
        new HSAQueueDescriptor(basePointer, db_offset,
-                              hostReadIndexPointer, size);
+                              hostReadIndexPointer, size, gfxVersion);
     AQLRingBuffer* aql_buf =
         new AQLRingBuffer(NUM_DMA_BUFS, hsaPP->name());
     QCntxt q_cntxt(q_desc, aql_buf);
@@ -116,7 +115,8 @@ HWScheduler::registerNewQueue(uint64_t hostReadIndexPointer,
 
     // Check if this newly created queue can be directly mapped
     // to registered queue list
-    GEM5_VAR_USED bool register_q = mapQIfSlotAvlbl(queue_id, aql_buf, q_desc);
+    [[maybe_unused]] bool register_q =
+        mapQIfSlotAvlbl(queue_id, aql_buf, q_desc);
     schedWakeup();
     DPRINTF(HSAPacketProcessor,
              "%s: offset = %p, qID = %d, is_regd = %s, AL size %d\n",

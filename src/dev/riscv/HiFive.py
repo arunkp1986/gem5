@@ -38,7 +38,7 @@ from m5.objects.PMAChecker import PMAChecker
 from m5.objects.Clint import Clint
 from m5.objects.Plic import Plic
 from m5.objects.RTC import RiscvRTC
-from m5.objects.Uart import Uart8250
+from m5.objects.Uart import RiscvUart8250
 from m5.objects.Terminal import Terminal
 from m5.params import *
 from m5.proxy import *
@@ -106,14 +106,11 @@ class HiFive(Platform):
     plic = Param.Plic(Plic(pio_addr=0xc000000), "PLIC")
 
     # Uart
-    uart = Uart8250(pio_addr=0x10000000)
+    uart = RiscvUart8250(pio_addr=0x10000000)
     # Int source ID to redirect console interrupts to
     # Set to 0 if using a pci interrupt for Uart instead
     uart_int_id = Param.Int(0xa, "PLIC Uart interrupt ID")
     terminal = Terminal()
-
-    # Dummy param for generating devicetree
-    cpu_count = Param.Int(0, "dummy")
 
     def _on_chip_devices(self):
         """Returns a list of on-chip peripherals
@@ -129,6 +126,8 @@ class HiFive(Platform):
         devices = [self.uart]
         if hasattr(self, "disk"):
             devices.append(self.disk)
+        if hasattr(self, "rng"):
+            devices.append(self.rng)
         return devices
 
     def _on_chip_ranges(self):
@@ -172,6 +171,13 @@ class HiFive(Platform):
         for device in self._off_chip_devices():
             device.pio = bus.mem_side_ports
 
+    def setNumCores(self, num_cpu):
+        """ Sets the PLIC and CLINT to have the right number of threads and
+            contexts. Assumes that the cores have a single hardware thread.
+        """
+        self.plic.n_contexts = num_cpu * 2
+        self.clint.num_threads = num_cpu
+
     def generateDeviceTree(self, state):
         cpus_node = FdtNode("cpus")
         cpus_node.append(FdtPropertyWords("timebase-frequency", [10000000]))
@@ -189,6 +195,8 @@ class HiFive(Platform):
 
         yield node
 
+    # For generating devicetree
+    _cpu_count = 0
     def annotateCpuDeviceNode(self, cpu, state):
         cpu.append(FdtPropertyStrings('mmu-type', 'riscv,sv48'))
         cpu.append(FdtPropertyStrings('status', 'okay'))
@@ -202,8 +210,8 @@ class HiFive(Platform):
         int_node.appendCompatible("riscv,cpu-intc")
 
         cpus = self.system.unproxy(self).cpu
-        phandle = int_state.phandle(cpus[self.cpu_count])
-        self.cpu_count += 1
+        phandle = int_state.phandle(cpus[self._cpu_count])
+        self._cpu_count += 1
         int_node.append(FdtPropertyWords("phandle", [phandle]))
 
         cpu.append(int_node)

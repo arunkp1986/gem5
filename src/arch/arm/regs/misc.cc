@@ -1321,7 +1321,7 @@ snsBankedIndex(MiscRegIndex reg, ThreadContext *tc, bool ns)
 {
     int reg_as_int = static_cast<int>(reg);
     if (miscRegInfo[reg][MISCREG_BANKED]) {
-        reg_as_int += (ArmSystem::haveSecurity(tc) &&
+        reg_as_int += (ArmSystem::haveEL(tc, EL3) &&
                       !ArmSystem::highestELIs64(tc) && !ns) ? 2 : 1;
     }
     return reg_as_int;
@@ -1387,7 +1387,7 @@ canReadAArch64SysReg(MiscRegIndex reg, HCR hcr, SCR scr, CPSR cpsr,
             return false;
     }
 
-    bool secure = ArmSystem::haveSecurity(tc) && !scr.ns;
+    bool secure = ArmSystem::haveEL(tc, EL3) && !scr.ns;
     bool el2_host = EL2Enabled(tc) && hcr.e2h;
 
     switch (currEL(cpsr)) {
@@ -1423,7 +1423,7 @@ canWriteAArch64SysReg(MiscRegIndex reg, HCR hcr, SCR scr, CPSR cpsr,
         return false;
     ExceptionLevel el = currEL(cpsr);
 
-    bool secure = ArmSystem::haveSecurity(tc) && !scr.ns;
+    bool secure = ArmSystem::haveEL(tc, EL3) && !scr.ns;
     bool el2_host = EL2Enabled(tc) && hcr.e2h;
 
     switch (el) {
@@ -2451,6 +2451,8 @@ decodeAArch64SysReg(unsigned op0, unsigned op1,
                         return MISCREG_CURRENTEL;
                       case 3:
                         return MISCREG_PAN;
+                      case 4:
+                        return MISCREG_UAO;
                     }
                     break;
                   case 6:
@@ -2868,7 +2870,7 @@ decodeAArch64SysReg(unsigned op0, unsigned op1,
                     }
                     break;
                 }
-                GEM5_FALLTHROUGH;
+                [[fallthrough]];
               default:
                 // S3_<op1>_11_<Cm>_<op2>
                 return MISCREG_IMPDEF_UNIMPL;
@@ -3408,7 +3410,7 @@ ISA::initializeMiscRegMetadata()
     // This boolean variable specifies if the system is running in aarch32 at
     // EL3 (aarch32EL3 = true). It is false if EL3 is not implemented, or it
     // is running in aarch64 (aarch32EL3 = false)
-    bool aarch32EL3 = haveSecurity && !highestELIs64;
+    bool aarch32EL3 = release->has(ArmExtension::SECURITY) && !highestELIs64;
 
     // Set Privileged Access Never on taking an exception to EL1 (Arm 8.1+),
     // unsupported
@@ -4944,7 +4946,9 @@ ISA::initializeMiscRegMetadata()
       .allPrivileges().exceptUserMode().writes(0);
     InitReg(MISCREG_PAN)
       .allPrivileges().exceptUserMode()
-      .implemented(havePAN);
+      .implemented(release->has(ArmExtension::FEAT_PAN));
+    InitReg(MISCREG_UAO)
+      .allPrivileges().exceptUserMode();
     InitReg(MISCREG_NZCV)
       .allPrivileges();
     InitReg(MISCREG_DAIF)

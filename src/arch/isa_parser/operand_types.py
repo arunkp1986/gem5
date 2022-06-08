@@ -449,7 +449,7 @@ class VecRegOperand(Operand):
         return wb
 
     def finalize(self, predRead, predWrite):
-        super(VecRegOperand, self).finalize(predRead, predWrite)
+        super().finalize(predRead, predWrite)
         if self.is_dest:
             self.op_rd = self.makeReadW(predWrite) + self.op_rd
 
@@ -585,7 +585,7 @@ class VecPredRegOperand(Operand):
         return wb
 
     def finalize(self, predRead, predWrite):
-        super(VecPredRegOperand, self).finalize(predRead, predWrite)
+        super().finalize(predRead, predWrite)
         if self.is_dest:
             self.op_rd = self.makeReadW(predWrite) + self.op_rd
 
@@ -737,6 +737,10 @@ class MemOperand(Operand):
         return ''
 
 class PCStateOperand(Operand):
+    def __init__(self, parser, *args, **kwargs):
+        super().__init__(parser, *args, **kwargs)
+        self.parser = parser
+
     def makeConstructor(self, predRead, predWrite):
         return ''
 
@@ -747,7 +751,8 @@ class PCStateOperand(Operand):
                 (self.base_name, self.reg_spec)
         else:
             # The whole PC state itself.
-            return '%s = xc->pcState();\n' % self.base_name
+            return f'{self.base_name} = ' \
+                    f'xc->pcState().as<{self.parser.namespace}::PCState>();\n'
 
     def makeWrite(self, predWrite):
         if self.reg_spec:
@@ -756,10 +761,10 @@ class PCStateOperand(Operand):
                 (self.reg_spec, self.base_name)
         else:
             # The whole PC state itself.
-            return 'xc->pcState(%s);\n' % self.base_name
+            return f'xc->pcState({self.base_name});\n'
 
     def makeDecl(self):
-        ctype = 'TheISA::PCState'
+        ctype = f'{self.parser.namespace}::PCState'
         if self.isPCPart():
             ctype = self.ctype
         # Note that initializations in the declarations are solely

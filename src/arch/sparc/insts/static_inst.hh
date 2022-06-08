@@ -32,10 +32,12 @@
 
 #include <cstdint>
 
+#include "arch/sparc/pcstate.hh"
 #include "arch/sparc/types.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
 
 namespace gem5
 {
@@ -110,7 +112,8 @@ class SparcStaticInst : public StaticInst
     void printRegArray(std::ostream &os,
         const RegId *indexArray, int num) const;
 
-    void advancePC(PCState &pcState) const override;
+    void advancePC(PCStateBase &pcState) const override;
+    void advancePC(ThreadContext *tc) const override;
 
     static bool passesFpCondition(uint32_t fcc, uint32_t condition);
     static bool passesCondition(uint32_t codes, uint32_t condition);
@@ -121,13 +124,15 @@ class SparcStaticInst : public StaticInst
         return simpleAsBytes(buf, size, machInst);
     }
 
-    PCState
-    buildRetPC(const PCState &curPC, const PCState &callPC) const override
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
     {
-        PCState ret = callPC;
+        PCStateBase *ret_ptr = call_pc.clone();
+        auto &ret = ret_ptr->as<PCState>();
         ret.uEnd();
-        ret.pc(curPC.npc());
-        return ret;
+        ret.pc(cur_pc.as<PCState>().npc());
+        return std::unique_ptr<PCStateBase>{ret_ptr};
     }
 };
 

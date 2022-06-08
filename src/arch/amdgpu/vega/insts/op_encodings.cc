@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -482,7 +480,7 @@ namespace VegaISA
         : VEGAGPUStaticInst(opcode)
     {
         setFlag(Scalar);
-        setFlag(SMEM);
+        setFlag(GlobalSegment);
 
         // copy first instruction DWORD
         instData = iFmt[0];
@@ -491,7 +489,7 @@ namespace VegaISA
         _srcLiteral = *reinterpret_cast<uint32_t*>(&iFmt[1]);
 
         if (instData.GLC)
-            setFlag(GroupCoherent);
+            setFlag(GloballyCoherent);
     } // Inst_SMEM
 
     Inst_SMEM::~Inst_SMEM()
@@ -1152,7 +1150,7 @@ namespace VegaISA
     Inst_DS::Inst_DS(InFmt_DS *iFmt, const std::string &opcode)
         : VEGAGPUStaticInst(opcode)
     {
-        setFlag(LDS);
+        setFlag(GroupSegment);
 
         // copy first instruction DWORD
         instData = iFmt[0];
@@ -1237,10 +1235,9 @@ namespace VegaISA
         // copy second instruction DWORD
         extData = ((InFmt_MUBUF_1 *)iFmt)[1];
         _srcLiteral = *reinterpret_cast<uint32_t*>(&iFmt[1]);
-        setFlag(TextureMem);
 
         if (instData.GLC)
-            setFlag(GroupCoherent);
+            setFlag(GloballyCoherent);
 
         if (instData.SLC)
             setFlag(SystemCoherent);
@@ -1331,10 +1328,9 @@ namespace VegaISA
         // copy second instruction DWORD
         extData = ((InFmt_MTBUF_1 *)iFmt)[1];
         _srcLiteral = *reinterpret_cast<uint32_t*>(&iFmt[1]);
-        setFlag(TextureMem);
 
         if (instData.GLC)
-            setFlag(GroupCoherent);
+            setFlag(GloballyCoherent);
 
         if (extData.SLC)
             setFlag(SystemCoherent);
@@ -1404,10 +1400,9 @@ namespace VegaISA
         // copy second instruction DWORD
         extData = ((InFmt_MIMG_1 *)iFmt)[1];
         _srcLiteral = *reinterpret_cast<uint32_t*>(&iFmt[1]);
-        setFlag(TextureMem);
 
         if (instData.GLC)
-            setFlag(GroupCoherent);
+            setFlag(GloballyCoherent);
 
         if (instData.SLC)
             setFlag(SystemCoherent);
@@ -1515,7 +1510,15 @@ namespace VegaISA
     Inst_FLAT::Inst_FLAT(InFmt_FLAT *iFmt, const std::string &opcode)
         : VEGAGPUStaticInst(opcode)
     {
-        setFlag(Flat);
+        // The SEG field specifies FLAT(0) SCRATCH(1) or GLOBAL(2)
+        if (iFmt->SEG == 0) {
+            setFlag(Flat);
+        } else if (iFmt->SEG == 2) {
+            setFlag(FlatGlobal);
+        } else {
+            panic("Unknown flat segment: %d\n", iFmt->SEG);
+        }
+
         // copy first instruction DWORD
         instData = iFmt[0];
         // copy second instruction DWORD
@@ -1523,7 +1526,7 @@ namespace VegaISA
         _srcLiteral = *reinterpret_cast<uint32_t*>(&iFmt[1]);
 
         if (instData.GLC)
-            setFlag(GroupCoherent);
+            setFlag(GloballyCoherent);
 
         if (instData.SLC)
             setFlag(SystemCoherent);
@@ -1535,6 +1538,21 @@ namespace VegaISA
 
     void
     Inst_FLAT::initOperandInfo()
+    {
+        // One of the flat subtypes should be specified via flags
+        assert(isFlat() ^ isFlatGlobal());
+
+        if (isFlat()) {
+            initFlatOperandInfo();
+        } else if (isFlatGlobal()) {
+            initGlobalOperandInfo();
+        } else {
+            panic("Unknown flat subtype!\n");
+        }
+    }
+
+    void
+    Inst_FLAT::initFlatOperandInfo()
     {
         //3 formats:
         // 1 dst + 1 src (load)
@@ -1570,6 +1588,66 @@ namespace VegaISA
         assert(dstOps.size() == numDstRegOperands());
     }
 
+    void
+    Inst_FLAT::initGlobalOperandInfo()
+    {
+        //3 formats:
+        // 1 dst + 2 src (load)
+        // 0 dst + 3 src (store)
+        // 1 dst + 3 src (atomic)
+        int opNum = 0;
+
+        // Needed because can't take addr of bitfield
+        int reg = 0;
+
+        if (getNumOperands() > 3)
+            assert(isAtomic());
+
+        reg = extData.ADDR;
+        srcOps.emplace_back(reg, getOperandSize(opNum), true,
+                              false, true, false);
+        opNum++;
+
+        if (numSrcRegOperands() == 2) {
+            reg = extData.SADDR;
+            // 0x7f (off) means the sgpr is not used. Don't read it
+            if (reg != 0x7f) {
+                srcOps.emplace_back(reg, getOperandSize(opNum), true,
+                                      true, false, false);
+            }
+            opNum++;
+        }
+
+        if (numSrcRegOperands() == 3) {
+            reg = extData.DATA;
+            srcOps.emplace_back(reg, getOperandSize(opNum), true,
+                                  false, true, false);
+            opNum++;
+
+            reg = extData.SADDR;
+            // 0x7f (off) means the sgpr is not used. Don't read it
+            if (reg != 0x7f) {
+                srcOps.emplace_back(reg, getOperandSize(opNum), true,
+                                      true, false, false);
+            }
+            opNum++;
+        }
+
+        if (numDstRegOperands()) {
+            reg = extData.VDST;
+            dstOps.emplace_back(reg, getOperandSize(opNum), false,
+                                  false, true, false);
+        }
+
+        reg = extData.SADDR;
+        if (reg != 0x7f) {
+            assert(srcOps.size() == numSrcRegOperands());
+        } else {
+            assert(srcOps.size() == numSrcRegOperands() - 1);
+        }
+        assert(dstOps.size() == numDstRegOperands());
+    }
+
     int
     Inst_FLAT::instSize() const
     {
@@ -1578,6 +1656,21 @@ namespace VegaISA
 
     void
     Inst_FLAT::generateDisassembly()
+    {
+        // One of the flat subtypes should be specified via flags
+        assert(isFlat() ^ isFlatGlobal());
+
+        if (isFlat()) {
+            generateFlatDisassembly();
+        } else if (isFlatGlobal()) {
+            generateGlobalDisassembly();
+        } else {
+            panic("Unknown flat subtype!\n");
+        }
+    }
+
+    void
+    Inst_FLAT::generateFlatDisassembly()
     {
         std::stringstream dis_stream;
         dis_stream << _opcode << " ";
@@ -1589,6 +1682,32 @@ namespace VegaISA
 
         if (isStore())
             dis_stream << ", v" << extData.DATA;
+
+        disassembly = dis_stream.str();
+    }
+
+    void
+    Inst_FLAT::generateGlobalDisassembly()
+    {
+        // Replace flat_ with global_ in assembly string
+        std::string global_opcode = _opcode;
+        global_opcode.replace(0, 4, "global");
+
+        std::stringstream dis_stream;
+        dis_stream << global_opcode << " ";
+
+        if (isLoad())
+            dis_stream << "v" << extData.VDST << ", ";
+
+        dis_stream << "v[" << extData.ADDR << ":" << extData.ADDR + 1 << "]";
+
+        if (isStore())
+            dis_stream << ", v" << extData.DATA;
+
+        if (extData.SADDR == 0x7f)
+            dis_stream << ", off";
+        else
+            dis_stream << ", " << extData.SADDR;
 
         disassembly = dis_stream.str();
     }

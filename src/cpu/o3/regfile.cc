@@ -42,8 +42,6 @@
 #include "cpu/o3/regfile.hh"
 
 #include "cpu/o3/free_list.hh"
-#include "arch/generic/types.hh"
-#include "cpu/o3/free_list.hh"
 
 namespace gem5
 {
@@ -56,11 +54,11 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
                          unsigned _numPhysicalVecRegs,
                          unsigned _numPhysicalVecPredRegs,
                          unsigned _numPhysicalCCRegs,
-                         const BaseISA::RegClasses &regClasses,
-                         VecMode vmode)
+                         const BaseISA::RegClasses &regClasses)
     : intRegFile(_numPhysicalIntRegs),
       floatRegFile(_numPhysicalFloatRegs),
       vectorRegFile(_numPhysicalVecRegs),
+      vectorElemRegFile(_numPhysicalVecRegs * TheISA::NumVecElemPerVecReg),
       vecPredRegFile(_numPhysicalVecPredRegs),
       ccRegFile(_numPhysicalCCRegs),
       numPhysicalIntRegs(_numPhysicalIntRegs),
@@ -75,8 +73,7 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
                    + _numPhysicalVecRegs
                    + _numPhysicalVecRegs * TheISA::NumVecElemPerVecReg
                    + _numPhysicalVecPredRegs
-                   + _numPhysicalCCRegs),
-      vecMode(vmode)
+                   + _numPhysicalCCRegs)
 {
     RegIndex phys_reg;
     RegIndex flat_reg_idx = 0;
@@ -162,13 +159,8 @@ PhysRegFile::initFreeList(UnifiedFreeList *freeList)
                     elemIdx].elemIndex() == elemIdx);
         }
     }
-
-    /* depending on the mode we add the vector registers as whole units or
-     * as different elements. */
-    if (vecMode == enums::Full)
-        freeList->addRegs(vecRegIds.begin(), vecRegIds.end());
-    else
-        freeList->addRegs(vecElemIds.begin(), vecElemIds.end());
+    freeList->addRegs(vecRegIds.begin(), vecRegIds.end());
+    freeList->addRegs(vecElemIds.begin(), vecElemIds.end());
 
     // The next batch of the registers are the predicate physical
     // registers; put them onto the predicate free list.
@@ -186,18 +178,7 @@ PhysRegFile::initFreeList(UnifiedFreeList *freeList)
 }
 
 PhysRegFile::IdRange
-PhysRegFile::getRegElemIds(PhysRegIdPtr reg)
-{
-    panic_if(!reg->is(VecRegClass),
-            "Trying to get elems of a %s register", reg->className());
-    auto idx = reg->index();
-    return std::make_pair(
-                vecElemIds.begin() + idx * TheISA::NumVecElemPerVecReg,
-                vecElemIds.begin() + (idx+1) * TheISA::NumVecElemPerVecReg);
-}
-
-PhysRegFile::IdRange
-PhysRegFile::getRegIds(RegClass cls)
+PhysRegFile::getRegIds(RegClassType cls)
 {
     switch (cls)
     {

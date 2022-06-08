@@ -193,7 +193,6 @@ class ArmFault : public FaultBase
         // (exceptions taken in HYP mode or in AArch64 state)
         const ExceptionClass ec;
 
-        FaultStat count;
         FaultVals(const FaultName& name_, const FaultOffset& offset_,
                 const uint16_t& currELTOffset_, const uint16_t& currELHOffset_,
                 const uint16_t& lowerEL64Offset_,
@@ -226,6 +225,8 @@ class ArmFault : public FaultBase
 
     void invoke(ThreadContext *tc, const StaticInstPtr &inst =
                 nullStaticInstPtr) override;
+    void invoke32(ThreadContext *tc, const StaticInstPtr &inst =
+                  nullStaticInstPtr);
     void invoke64(ThreadContext *tc, const StaticInstPtr &inst =
                   nullStaticInstPtr);
     void update(ThreadContext *tc);
@@ -235,7 +236,6 @@ class ArmFault : public FaultBase
 
     ArmStaticInst *instrAnnotate(const StaticInstPtr &inst);
     virtual void annotate(AnnotationIDs id, uint64_t val) {}
-    virtual FaultStat& countStat() = 0;
     virtual FaultOffset offset(ThreadContext *tc) = 0;
     virtual FaultOffset offset64(ThreadContext *tc) = 0;
     virtual OperatingMode nextMode() = 0;
@@ -267,7 +267,6 @@ class ArmFaultVals : public ArmFault
     ArmFaultVals<T>(ExtMachInst _machInst = 0, uint32_t _iss = 0) :
         ArmFault(_machInst, _iss) {}
     FaultName name() const override { return vals.name; }
-    FaultStat & countStat() override { return vals.count; }
     FaultOffset offset(ThreadContext *tc) override;
 
     FaultOffset offset64(ThreadContext *tc) override;

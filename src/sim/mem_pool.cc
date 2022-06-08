@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -33,15 +31,24 @@
 
 #include "sim/mem_pool.hh"
 
-#include "sim/system.hh"
+#include "base/addr_range.hh"
+#include "base/logging.hh"
 
 namespace gem5
 {
 
-MemPool::MemPool(System *system, Addr ptr, Addr limit)
-        : sys(system), freePageNum(ptr >> sys->getPageShift()),
-        _totalPages(limit >> sys->getPageShift())
+MemPool::MemPool(Addr page_shift, Addr ptr, Addr limit)
+        : pageShift(page_shift), startPageNum(ptr >> page_shift),
+        freePageNum(ptr >> page_shift),
+        _totalPages((limit - ptr) >> page_shift)
 {
+    gem5_assert(_totalPages > 0);
+}
+
+Counter
+MemPool::startPage() const
+{
+    return startPageNum;
 }
 
 Counter
@@ -59,7 +66,7 @@ MemPool::setFreePage(Counter value)
 Addr
 MemPool::freePageAddr() const
 {
-    return freePageNum << sys->getPageShift();
+    return freePageNum << pageShift;
 }
 
 Counter
@@ -71,31 +78,37 @@ MemPool::totalPages() const
 Counter
 MemPool::allocatedPages() const
 {
-    return freePageNum;
+    return freePageNum - startPageNum;
 }
 
 Counter
 MemPool::freePages() const
 {
-    return _totalPages - freePageNum;
+    return _totalPages - allocatedPages();
+}
+
+Addr
+MemPool::startAddr() const
+{
+    return startPage() << pageShift;
 }
 
 Addr
 MemPool::allocatedBytes() const
 {
-    return allocatedPages() << sys->getPageShift();
+    return allocatedPages() << pageShift;
 }
 
 Addr
 MemPool::freeBytes() const
 {
-    return freePages() << sys->getPageShift();
+    return freePages() << pageShift;
 }
 
 Addr
 MemPool::totalBytes() const
 {
-    return totalPages() << sys->getPageShift();
+    return totalPages() << pageShift;
 }
 
 Addr
@@ -103,19 +116,77 @@ MemPool::allocate(Addr npages)
 {
     Addr return_addr = freePageAddr();
     freePageNum += npages;
-    Addr next_return_addr = freePageAddr();
 
-    if (sys->m5opRange().valid() &&
-        next_return_addr >= sys->m5opRange().start()) {
-        warn("Reached m5ops MMIO region\n");
-        return_addr = sys->m5opRange().end();
-        freePageNum = (return_addr >> sys->getPageShift()) + npages;
-    }
-
-    fatal_if((freePages() <= 0), "Out of memory, "
-             "please increase size of physical memory.");
+    fatal_if(freePages() <= 0,
+            "Out of memory, please increase size of physical memory.");
 
     return return_addr;
+}
+
+void
+MemPool::serialize(CheckpointOut &cp) const
+{
+    paramOut(cp, "page_shift", pageShift);
+    paramOut(cp, "start_page", startPageNum);
+    paramOut(cp, "free_page_num", freePageNum);
+    paramOut(cp, "total_pages", _totalPages);
+}
+
+void
+MemPool::unserialize(CheckpointIn &cp)
+{
+    paramIn(cp, "page_shift", pageShift);
+    paramIn(cp, "start_page", startPageNum);
+    paramIn(cp, "free_page_num", freePageNum);
+    paramIn(cp, "total_pages", _totalPages);
+}
+
+void
+MemPools::populate(const AddrRangeList &memories)
+{
+    for (const auto &mem : memories)
+        pools.emplace_back(pageShift, mem.start(), mem.end());
+}
+
+Addr
+MemPools::allocPhysPages(int npages, int pool_id)
+{
+    return pools[pool_id].allocate(npages);
+}
+
+Addr
+MemPools::memSize(int pool_id) const
+{
+    return pools[pool_id].totalBytes();
+}
+
+Addr
+MemPools::freeMemSize(int pool_id) const
+{
+    return pools[pool_id].freeBytes();
+}
+
+void
+MemPools::serialize(CheckpointOut &cp) const
+{
+    int num_pools = pools.size();
+    SERIALIZE_SCALAR(num_pools);
+
+    for (int i = 0; i < num_pools; i++)
+        pools[i].serializeSection(cp, csprintf("pool%d", i));
+}
+
+void
+MemPools::unserialize(CheckpointIn &cp)
+{
+    int num_pools = 0;
+    UNSERIALIZE_SCALAR(num_pools);
+
+    for (int i = 0; i < num_pools; i++) {
+        MemPool pool;
+        pool.unserializeSection(cp, csprintf("pool%d", i));
+        pools.push_back(pool);
+    }
 }
 
 } // namespace gem5

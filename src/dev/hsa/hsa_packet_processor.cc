@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -44,6 +42,7 @@
 #include "dev/dma_device.hh"
 #include "dev/hsa/hsa_packet.hh"
 #include "dev/hsa/hw_scheduler.hh"
+#include "enums/GfxVersion.hh"
 #include "gpu-compute/gpu_command_processor.hh"
 #include "mem/packet_access.hh"
 #include "mem/page_table.hh"
@@ -100,13 +99,15 @@ void
 HSAPacketProcessor::setDeviceQueueDesc(uint64_t hostReadIndexPointer,
                                        uint64_t basePointer,
                                        uint64_t queue_id,
-                                       uint32_t size, int doorbellSize)
+                                       uint32_t size, int doorbellSize,
+                                       GfxVersion gfxVersion)
 {
     DPRINTF(HSAPacketProcessor,
              "%s:base = %p, qID = %d, ze = %d\n", __FUNCTION__,
              (void *)basePointer, queue_id, size);
     hwSchdlr->registerNewQueue(hostReadIndexPointer,
-                               basePointer, queue_id, size, doorbellSize);
+                               basePointer, queue_id, size, doorbellSize,
+                               gfxVersion);
 }
 
 AddrRangeList
@@ -127,7 +128,7 @@ HSAPacketProcessor::write(Packet *pkt)
     assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
 
     // TODO: How to get pid??
-    GEM5_VAR_USED Addr daddr = pkt->getAddr() - pioAddr;
+    [[maybe_unused]] Addr daddr = pkt->getAddr() - pioAddr;
 
     DPRINTF(HSAPacketProcessor,
           "%s: write of size %d to reg-offset %d (0x%x)\n",
@@ -159,16 +160,15 @@ HSAPacketProcessor::read(Packet *pkt)
     return pioDelay;
 }
 
-void
-HSAPacketProcessor::translateOrDie(Addr vaddr, Addr &paddr)
+TranslationGenPtr
+HSAPacketProcessor::translate(Addr vaddr, Addr size)
 {
     // Grab the process and try to translate the virtual address with it; with
     // new extensions, it will likely be wrong to just arbitrarily grab context
     // zero.
     auto process = sys->threads[0]->getProcessPtr();
 
-    if (!process->pTable->translate(vaddr, paddr))
-        fatal("failed translation: vaddr 0x%x\n", vaddr);
+    return process->pTable->translateRange(vaddr, size);
 }
 
 /**
@@ -212,7 +212,7 @@ HSAPacketProcessor::cmdQueueCmdDma(HSAPacketProcessor *hsaPP, int pid,
     dma_series_ctx *series_ctx, void *dest_4debug)
 {
     uint32_t rl_idx = series_ctx->rl_idx;
-    GEM5_VAR_USED AQLRingBuffer *aqlRingBuffer =
+    [[maybe_unused]] AQLRingBuffer *aqlRingBuffer =
         hsaPP->regdQList[rl_idx]->qCntxt.aqlBuf;
     HSAQueueDescriptor* qDesc =
         hsaPP->regdQList[rl_idx]->qCntxt.qDesc;
@@ -559,7 +559,8 @@ HSAPacketProcessor::getCommandsFromHost(int pid, uint32_t rl_idx)
 void
 HSAPacketProcessor::displayQueueDescriptor(int pid, uint32_t rl_idx)
 {
-    GEM5_VAR_USED HSAQueueDescriptor* qDesc = regdQList[rl_idx]->qCntxt.qDesc;
+    [[maybe_unused]] HSAQueueDescriptor* qDesc =
+        regdQList[rl_idx]->qCntxt.qDesc;
     DPRINTF(HSAPacketProcessor,
             "%s: pid[%d], basePointer[0x%lx], dBPointer[0x%lx], "
             "writeIndex[0x%x], readIndex[0x%x], size(bytes)[0x%x]\n",

@@ -10,7 +10,7 @@
  * unmodified and in its entirety in all distributions of the software,
  * modified or unmodified, in source code or in binary form.
  *
- * Copyright 2015 LabWare
+ * Copyright 2015, 2021 LabWare
  * Copyright 2014 Google, Inc.
  * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
@@ -152,6 +152,8 @@
 #include "debug/GDBAll.hh"
 #include "mem/port.hh"
 #include "mem/port_proxy.hh"
+#include "mem/se_translating_port_proxy.hh"
+#include "mem/translating_port_proxy.hh"
 #include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/system.hh"
@@ -354,14 +356,16 @@ std::map<Addr, HardBreakpoint *> hardBreakMap;
 }
 
 BaseRemoteGDB::BaseRemoteGDB(System *_system, int _port) :
-        connectEvent(nullptr), dataEvent(nullptr), _port(_port), fd(-1),
-        sys(_system), trapEvent(this), singleStepEvent(*this)
+        incomingConnectionEvent(nullptr), incomingDataEvent(nullptr),
+        _port(_port), fd(-1), sys(_system),
+        connectEvent(this), disconnectEvent(this), trapEvent(this),
+        singleStepEvent(*this)
 {}
 
 BaseRemoteGDB::~BaseRemoteGDB()
 {
-    delete connectEvent;
-    delete dataEvent;
+    delete incomingConnectionEvent;
+    delete incomingDataEvent;
 }
 
 std::string
@@ -383,8 +387,9 @@ BaseRemoteGDB::listen()
         _port++;
     }
 
-    connectEvent = new ConnectEvent(this, listener.getfd(), POLLIN);
-    pollQueue.schedule(connectEvent);
+    incomingConnectionEvent =
+            new IncomingConnectionEvent(this, listener.getfd(), POLLIN);
+    pollQueue.schedule(incomingConnectionEvent);
 
     ccprintf(std::cerr, "%d: %s: listening for remote gdb on port %d\n",
              curTick(), name(), _port);
@@ -395,6 +400,8 @@ BaseRemoteGDB::connect()
 {
     panic_if(!listener.islistening(),
              "Can't accept GDB connections without any threads!");
+
+    pollQueue.remove(incomingConnectionEvent);
 
     int sfd = listener.accept(true);
 
@@ -419,30 +426,55 @@ BaseRemoteGDB::attach(int f)
 {
     fd = f;
 
-    dataEvent = new DataEvent(this, fd, POLLIN);
-    pollQueue.schedule(dataEvent);
-
     attached = true;
     DPRINTFN("remote gdb attached\n");
+
+    processCommands();
+
+    if (isAttached()) {
+        // At this point an initial communication with GDB is handled
+        // and we're ready to continue. Here we arrange IncomingDataEvent
+        // to get notified when GDB breaks in.
+        //
+        // However, GDB can decide to disconnect during that initial
+        // communication. In that case, we cannot arrange data event because
+        // the socket is already closed (not that it makes any sense, anyways).
+        //
+        // Hence the check above.
+        incomingDataEvent = new IncomingDataEvent(this, fd, POLLIN);
+        pollQueue.schedule(incomingDataEvent);
+    }
 }
 
 void
 BaseRemoteGDB::detach()
 {
     attached = false;
-    active = false;
     clearSingleStep();
     close(fd);
     fd = -1;
 
-    pollQueue.remove(dataEvent);
+    if (incomingDataEvent) {
+        // incomingDataEvent gets scheduled in attach() after
+        // initial communication with GDB is handled and GDB tells
+        // gem5 to continue.
+        //
+        // GDB can disconnect before that in which case `incomingDataEvent`
+        // is NULL.
+        //
+        // Hence the check above.
+
+        pollQueue.remove(incomingDataEvent);
+        incomingDataEvent = nullptr;
+    }
+    pollQueue.schedule(incomingConnectionEvent);
     DPRINTFN("remote gdb detached\n");
 }
 
 void
 BaseRemoteGDB::addThreadContext(ThreadContext *_tc)
 {
-    GEM5_VAR_USED auto it_success = threads.insert({_tc->contextId(), _tc});
+    [[maybe_unused]] auto it_success = threads.insert({_tc->contextId(), _tc});
     assert(it_success.second);
     // If no ThreadContext is current selected, select this one.
     if (!tc)
@@ -481,86 +513,44 @@ BaseRemoteGDB::selectThreadContext(ContextID id)
 // present, but might eventually become meaningful. (XXX) It might
 // makes sense to use POSIX errno values, because that is what the
 // gdb/remote.c functions want to return.
-bool
-BaseRemoteGDB::trap(ContextID id, int type)
+void
+BaseRemoteGDB::trap(ContextID id, int signum)
 {
     if (!attached)
-        return false;
+        return;
 
     if (tc->contextId() != id) {
         if (!selectThreadContext(id))
-            return false;
+            return;
     }
 
     DPRINTF(GDBMisc, "trap: PC=%s\n", tc->pcState());
 
     clearSingleStep();
 
-    /*
-     * The first entry to this function is normally through
-     * a breakpoint trap in kgdb_connect(), in which case we
-     * must advance past the breakpoint because gdb will not.
-     *
-     * On the first entry here, we expect that gdb is not yet
-     * listening to us, so just enter the interaction loop.
-     * After the debugger is "active" (connected) it will be
-     * waiting for a "signaled" message from us.
-     */
-    if (!active) {
-        active = true;
-    } else if (threadSwitching) {
+    if (threadSwitching) {
         threadSwitching = false;
         // Tell GDB the thread switch has completed.
         send("OK");
     } else {
         // Tell remote host that an exception has occurred.
-        send("S%02x", type);
+        send("S%02x", signum);
     }
 
-    // Stick frame regs into our reg cache.
-    regCachePtr = gdbRegs();
-    regCachePtr->getRegs(tc);
+    processCommands(signum);
+}
 
-    GdbCommand::Context cmd_ctx;
-    cmd_ctx.type = type;
-    std::vector<char> data;
-
-    for (;;) {
-        try {
-            recv(data);
-            if (data.size() == 1)
-                throw BadClient();
-            cmd_ctx.cmdByte = data[0];
-            cmd_ctx.data = data.data() + 1;
-            // One for sentinel, one for cmdByte.
-            cmd_ctx.len = data.size() - 2;
-
-            auto cmd_it = commandMap.find(cmd_ctx.cmdByte);
-            if (cmd_it == commandMap.end()) {
-                DPRINTF(GDBMisc, "Unknown command: %c(%#x)\n",
-                        cmd_ctx.cmdByte, cmd_ctx.cmdByte);
-                throw Unsupported();
-            }
-            cmd_ctx.cmd = &(cmd_it->second);
-
-            if (!(this->*(cmd_ctx.cmd->func))(cmd_ctx))
-                break;
-
-        } catch (BadClient &e) {
-            if (e.warning)
-                warn(e.warning);
-            detach();
-            break;
-        } catch (Unsupported &e) {
-            send("");
-        } catch (CmdError &e) {
-            send(e.error);
-        } catch (...) {
-            panic("Unrecognzied GDB exception.");
-        }
+void
+BaseRemoteGDB::incomingConnection(int revent)
+{
+    if (connectEvent.scheduled()) {
+        warn("GDB connect event has already been scheduled!");
+        return;
     }
 
-    return true;
+    if (revent & POLLIN) {
+        scheduleInstCommitEvent(&connectEvent, 0);
+    }
 }
 
 void
@@ -577,7 +567,7 @@ BaseRemoteGDB::incomingData(int revent)
         scheduleInstCommitEvent(&trapEvent, 0);
     } else if (revent & POLLNVAL) {
         descheduleInstCommitEvent(&trapEvent);
-        detach();
+        scheduleInstCommitEvent(&disconnectEvent, 0);
     }
 }
 
@@ -681,14 +671,63 @@ BaseRemoteGDB::send(const char *bp)
     } while ((c & 0x7f) == GDBBadP);
 }
 
+void
+BaseRemoteGDB::processCommands(int signum)
+{
+    // Stick frame regs into our reg cache.
+    regCachePtr = gdbRegs();
+    regCachePtr->getRegs(tc);
+
+    GdbCommand::Context cmd_ctx;
+    cmd_ctx.type = signum;
+    std::vector<char> data;
+
+    for (;;) {
+        try {
+            recv(data);
+            if (data.size() == 1)
+                throw BadClient();
+            cmd_ctx.cmdByte = data[0];
+            cmd_ctx.data = data.data() + 1;
+            // One for sentinel, one for cmdByte.
+            cmd_ctx.len = data.size() - 2;
+
+            auto cmd_it = commandMap.find(cmd_ctx.cmdByte);
+            if (cmd_it == commandMap.end()) {
+                DPRINTF(GDBMisc, "Unknown command: %c(%#x)\n",
+                        cmd_ctx.cmdByte, cmd_ctx.cmdByte);
+                throw Unsupported();
+            }
+            cmd_ctx.cmd = &(cmd_it->second);
+
+            if (!(this->*(cmd_ctx.cmd->func))(cmd_ctx))
+                break;
+
+        } catch (BadClient &e) {
+            if (e.warning)
+                warn(e.warning);
+            detach();
+            break;
+        } catch (Unsupported &e) {
+            send("");
+        } catch (CmdError &e) {
+            send(e.error);
+        } catch (std::exception &e) {
+            panic("Unrecognized GDB exception: %s", e.what());
+        } catch (...) {
+            panic("Unrecognized GDB exception.");
+        }
+    }
+}
+
 // Read bytes from kernel address space for debugger.
 bool
 BaseRemoteGDB::read(Addr vaddr, size_t size, char *data)
 {
     DPRINTF(GDBRead, "read:  addr=%#x, size=%d", vaddr, size);
 
-    PortProxy &proxy = tc->getVirtProxy();
-    proxy.readBlob(vaddr, data, size);
+    (FullSystem ? TranslatingPortProxy(tc) : SETranslatingPortProxy(tc)).
+        readBlob(vaddr, data, size);
 
 #if TRACING_ON
     if (debug::GDBRead) {
@@ -717,8 +756,8 @@ BaseRemoteGDB::write(Addr vaddr, size_t size, const char *data)
         } else
             DPRINTFNR("\n");
     }
-    PortProxy &proxy = tc->getVirtProxy();
-    proxy.writeBlob(vaddr, data, size);
+    (FullSystem ? TranslatingPortProxy(tc) : SETranslatingPortProxy(tc)).
+        writeBlob(vaddr, data, size);
 
     return true;
 }

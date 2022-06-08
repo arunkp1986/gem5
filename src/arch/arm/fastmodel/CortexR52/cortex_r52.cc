@@ -79,6 +79,12 @@ CortexR52::setCluster(CortexR52Cluster *_cluster, int _num)
     set_evs_param("vfp-enable_at_reset", params().vfp_enable_at_reset);
 }
 
+void
+CortexR52::setResetAddr(Addr addr, bool secure)
+{
+    evs_base_cpu->setResetAddr(num, addr, secure);
+}
+
 Port &
 CortexR52::getPort(const std::string &if_name, PortID idx)
 {
@@ -86,7 +92,9 @@ CortexR52::getPort(const std::string &if_name, PortID idx)
         // Since PPIs are indexed both by core and by number, modify the name
         // to hold the core number.
         return evs->gem5_getPort(csprintf("%s_%d", if_name, num), idx);
-    } else if (if_name == "amba" || if_name == "llpp" || if_name == "flash") {
+    } else if (if_name == "amba" || if_name == "llpp" || if_name == "flash" ||
+               if_name == "core_reset" || if_name == "poweron_reset" ||
+               if_name == "halt") {
         // Since these ports are scalar per core, use the core number as the
         // index. Also verify that that index is not being used.
         assert(idx == InvalidPortID);
@@ -149,6 +157,9 @@ Port &
 CortexR52Cluster::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "spi") {
+        return evs->gem5_getPort(if_name, idx);
+    } else if (if_name == "ext_slave" || if_name == "top_reset") {
+        assert(idx == InvalidPortID);
         return evs->gem5_getPort(if_name, idx);
     } else {
         return SimObject::getPort(if_name, idx);

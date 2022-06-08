@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -162,6 +160,9 @@ class GPUDynInst : public GPUExecContext
 
     InstSeqNum seqNum() const;
 
+    Addr pc();
+    void pc(Addr _pc);
+
     enums::StorageClassType executedAs();
 
     // virtual address for scalar memory operations
@@ -232,6 +233,7 @@ class GPUDynInst : public GPUExecContext
     bool isMemSync() const;
     bool isMemRef() const;
     bool isFlat() const;
+    bool isFlatGlobal() const;
     bool isLoad() const;
     bool isStore() const;
 

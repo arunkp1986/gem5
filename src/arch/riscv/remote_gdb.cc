@@ -135,16 +135,16 @@
 
 #include <string>
 
+#include "arch/riscv/gdb-xml/gdb_xml_riscv_cpu.hh"
+#include "arch/riscv/gdb-xml/gdb_xml_riscv_csr.hh"
+#include "arch/riscv/gdb-xml/gdb_xml_riscv_fpu.hh"
+#include "arch/riscv/gdb-xml/gdb_xml_riscv_target.hh"
 #include "arch/riscv/mmu.hh"
 #include "arch/riscv/pagetable_walker.hh"
 #include "arch/riscv/regs/float.hh"
 #include "arch/riscv/regs/int.hh"
 #include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/tlb.hh"
-#include "blobs/gdb_xml_riscv_cpu.hh"
-#include "blobs/gdb_xml_riscv_csr.hh"
-#include "blobs/gdb_xml_riscv_fpu.hh"
-#include "blobs/gdb_xml_riscv_target.hh"
 #include "cpu/thread_state.hh"
 #include "debug/GDBAcc.hh"
 #include "mem/page_table.hh"
@@ -195,7 +195,7 @@ RemoteGDB::RiscvGdbRegCache::getRegs(ThreadContext *context)
     {
         r.gpr[i] = context->readIntReg(i);
     }
-    r.pc = context->pcState().pc();
+    r.pc = context->pcState().instAddr();
 
     // Floating point registers
     for (int i = 0; i < NumFloatRegs; i++)

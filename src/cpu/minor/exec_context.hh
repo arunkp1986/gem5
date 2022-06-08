@@ -93,8 +93,8 @@ class ExecContext : public gem5::ExecContext
         execute(execute_),
         inst(inst_)
     {
-        DPRINTF(MinorExecute, "ExecContext setting PC: %s\n", inst->pc);
-        pcState(inst->pc);
+        DPRINTF(MinorExecute, "ExecContext setting PC: %s\n", *inst->pc);
+        pcState(*inst->pc);
         setPredicate(inst->readPredicate());
         setMemAccPredicate(inst->readMemAccPredicate());
         thread.setIntReg(zeroReg, 0);
@@ -176,7 +176,7 @@ class ExecContext : public gem5::ExecContext
         return thread.getWritableVecReg(reg);
     }
 
-    TheISA::VecElem
+    RegVal
     readVecElemOperand(const StaticInst *si, int idx) const override
     {
         const RegId& reg = si->srcRegIdx(idx);
@@ -235,8 +235,7 @@ class ExecContext : public gem5::ExecContext
     }
 
     void
-    setVecElemOperand(const StaticInst *si, int idx,
-                      const TheISA::VecElem val) override
+    setVecElemOperand(const StaticInst *si, int idx, RegVal val) override
     {
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.is(VecElemClass));
@@ -300,14 +299,14 @@ class ExecContext : public gem5::ExecContext
         return 0;
     }
 
-    TheISA::PCState
+    const PCStateBase &
     pcState() const override
     {
         return thread.pcState();
     }
 
     void
-    pcState(const TheISA::PCState &val) override
+    pcState(const PCStateBase &val) override
     {
         thread.pcState(val);
     }

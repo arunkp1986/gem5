@@ -47,10 +47,9 @@
 #include <memory>
 #include <string>
 
-#include "arch/pcstate.hh"
+#include "arch/generic/pcstate.hh"
 #include "base/logging.hh"
 #include "base/refcnt.hh"
-#include "config/the_isa.hh"
 #include "cpu/op_class.hh"
 #include "cpu/reg_class.hh"
 #include "cpu/static_inst_fwd.hh"
@@ -320,11 +319,11 @@ class StaticInst : public RefCounted, public StaticInstFlags
         panic("completeAcc not defined!");
     }
 
-    virtual void advancePC(TheISA::PCState &pc_state) const = 0;
+    virtual void advancePC(PCStateBase &pc_state) const = 0;
+    virtual void advancePC(ThreadContext *tc) const;
 
-    virtual TheISA::PCState
-    buildRetPC(const TheISA::PCState &cur_pc,
-            const TheISA::PCState &call_pc) const
+    virtual std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc, const PCStateBase &call_pc) const
     {
         panic("buildRetPC not defined!");
     }
@@ -340,7 +339,8 @@ class StaticInst : public RefCounted, public StaticInstFlags
      * Invalid if not a PC-relative branch (i.e. isDirectCtrl()
      * should be true).
      */
-    virtual TheISA::PCState branchTarget(const TheISA::PCState &pc) const;
+    virtual std::unique_ptr<PCStateBase> branchTarget(
+            const PCStateBase &pc) const;
 
     /**
      * Return the target address for an indirect branch (jump).  The
@@ -349,14 +349,8 @@ class StaticInst : public RefCounted, public StaticInstFlags
      * execute the branch in question.  Invalid if not an indirect
      * branch (i.e. isIndirectCtrl() should be true).
      */
-    virtual TheISA::PCState branchTarget(ThreadContext *tc) const;
-
-    /**
-     * Return true if the instruction is a control transfer, and if so,
-     * return the target address as well.
-     */
-    bool hasBranchTarget(const TheISA::PCState &pc, ThreadContext *tc,
-            TheISA::PCState &tgt) const;
+    virtual std::unique_ptr<PCStateBase> branchTarget(
+            ThreadContext *tc) const;
 
     /**
      * Return string representation of disassembled instruction.

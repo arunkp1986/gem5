@@ -253,7 +253,7 @@ SMMUv3::runProcessAtomic(SMMUProcess *proc, PacketPtr pkt)
                     pkt = action.pkt;
                     break;
                 }
-                GEM5_FALLTHROUGH;
+                [[fallthrough]];
             case ACTION_SEND_REQ_FINAL:
                 delay += requestPort.sendAtomic(action.pkt);
                 pkt = action.pkt;
@@ -309,7 +309,7 @@ SMMUv3::runProcessTiming(SMMUProcess *proc, PacketPtr pkt)
 
                 break;
             }
-            GEM5_FALLTHROUGH;
+            [[fallthrough]];
         case ACTION_SEND_REQ_FINAL:
             action.pkt->pushSenderState(proc);
 
@@ -564,22 +564,6 @@ SMMUv3::processCommand(const SMMUCommand &cmd)
         default:
             warn("Unimplemented command %#x\n", cmd.dw0.type);
             break;
-    }
-}
-
-const PageTableOps*
-SMMUv3::getPageTableOps(uint8_t trans_granule)
-{
-    static V8PageTableOps4k  ptOps4k;
-    static V8PageTableOps16k ptOps16k;
-    static V8PageTableOps64k ptOps64k;
-
-    switch (trans_granule) {
-    case TRANS_GRANULE_4K:  return &ptOps4k;
-    case TRANS_GRANULE_16K: return &ptOps16k;
-    case TRANS_GRANULE_64K: return &ptOps64k;
-    default:
-        panic("Unknown translation granule size %d", trans_granule);
     }
 }
 

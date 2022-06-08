@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -35,7 +33,7 @@
 
 #include <limits>
 
-#include "arch/x86/page_size.hh"
+#include "arch/amdgpu/common/tlb.hh"
 #include "base/output.hh"
 #include "debug/GPUDisp.hh"
 #include "debug/GPUExec.hh"
@@ -355,7 +353,7 @@ ComputeUnit::startWavefront(Wavefront *w, int waveId, LdsChunk *ldsChunk,
     // set the wavefront context to have a pointer to this section of the LDS
     w->ldsChunk = ldsChunk;
 
-    GEM5_VAR_USED int32_t refCount =
+    [[maybe_unused]] int32_t refCount =
                 lds.increaseRefCounter(w->dispatchId, w->wgId);
     DPRINTF(GPUDisp, "CU%d: increase ref ctr wg[%d] to [%d]\n",
                     cu_id, w->wgId, refCount);
@@ -959,7 +957,7 @@ ComputeUnit::DataPort::recvReqRetry()
 
     for (int i = 0; i < len; ++i) {
         PacketPtr pkt = retries.front().first;
-        GEM5_VAR_USED GPUDynInstPtr gpuDynInst = retries.front().second;
+        [[maybe_unused]] GPUDynInstPtr gpuDynInst = retries.front().second;
         DPRINTF(GPUMem, "CU%d: WF[%d][%d]: retry mem inst addr %#x\n",
                 computeUnit->cu_id, gpuDynInst->simdId, gpuDynInst->wfSlotId,
                 pkt->req->getPaddr());
@@ -993,7 +991,7 @@ ComputeUnit::SQCPort::recvReqRetry()
 
     for (int i = 0; i < len; ++i) {
         PacketPtr pkt = retries.front().first;
-        GEM5_VAR_USED Wavefront *wavefront = retries.front().second;
+        [[maybe_unused]] Wavefront *wavefront = retries.front().second;
         DPRINTF(GPUFetch, "CU%d: WF[%d][%d]: retrying FETCH addr %#x\n",
                 computeUnit->cu_id, wavefront->simdId, wavefront->wfSlotId,
                 pkt->req->getPaddr());
@@ -1076,8 +1074,8 @@ ComputeUnit::sendRequest(GPUDynInstPtr gpuDynInst, PortID index, PacketPtr pkt)
         pkt->senderState = new DTLBPort::SenderState(gpuDynInst, index);
 
         // This is the senderState needed by the TLB hierarchy to function
-        X86ISA::GpuTLB::TranslationState *translation_state =
-          new X86ISA::GpuTLB::TranslationState(TLB_mode, shader->gpuTc, false,
+        GpuTranslationState *translation_state =
+          new GpuTranslationState(TLB_mode, shader->gpuTc, false,
                                                pkt->senderState);
 
         pkt->senderState = translation_state;
@@ -1091,8 +1089,8 @@ ComputeUnit::sendRequest(GPUDynInstPtr gpuDynInst, PortID index, PacketPtr pkt)
             stats.hitsPerTLBLevel[hit_level]++;
 
             // New SenderState for the memory access
-            X86ISA::GpuTLB::TranslationState *sender_state =
-                safe_cast<X86ISA::GpuTLB::TranslationState*>(pkt->senderState);
+            GpuTranslationState *sender_state =
+                safe_cast<GpuTranslationState*>(pkt->senderState);
 
             delete sender_state->tlbEntry;
             delete sender_state->saved;
@@ -1169,7 +1167,7 @@ ComputeUnit::sendRequest(GPUDynInstPtr gpuDynInst, PortID index, PacketPtr pkt)
         delete pkt->senderState;
 
         // Because it's atomic operation, only need TLB translation state
-        pkt->senderState = new X86ISA::GpuTLB::TranslationState(TLB_mode,
+        pkt->senderState = new GpuTranslationState(TLB_mode,
                                                                 shader->gpuTc);
 
         tlbPort[tlbPort_index].sendFunctional(pkt);
@@ -1190,8 +1188,8 @@ ComputeUnit::sendRequest(GPUDynInstPtr gpuDynInst, PortID index, PacketPtr pkt)
                 new_pkt->req->getPaddr());
 
         // safe_cast the senderState
-        X86ISA::GpuTLB::TranslationState *sender_state =
-             safe_cast<X86ISA::GpuTLB::TranslationState*>(pkt->senderState);
+        GpuTranslationState *sender_state =
+             safe_cast<GpuTranslationState*>(pkt->senderState);
 
         delete sender_state->tlbEntry;
         delete new_pkt;
@@ -1211,7 +1209,7 @@ ComputeUnit::sendScalarRequest(GPUDynInstPtr gpuDynInst, PacketPtr pkt)
         new ComputeUnit::ScalarDTLBPort::SenderState(gpuDynInst);
 
     pkt->senderState =
-        new X86ISA::GpuTLB::TranslationState(tlb_mode, shader->gpuTc, false,
+        new GpuTranslationState(tlb_mode, shader->gpuTc, false,
                                              pkt->senderState);
 
     if (scalarDTLBPort.isStalled()) {
@@ -1397,15 +1395,15 @@ ComputeUnit::DTLBPort::recvTimingResp(PacketPtr pkt)
     computeUnit->stats.tlbCycles += curTick();
 
     // pop off the TLB translation state
-    X86ISA::GpuTLB::TranslationState *translation_state =
-               safe_cast<X86ISA::GpuTLB::TranslationState*>(pkt->senderState);
+    GpuTranslationState *translation_state =
+               safe_cast<GpuTranslationState*>(pkt->senderState);
 
     // no PageFaults are permitted for data accesses
     if (!translation_state->tlbEntry) {
         DTLBPort::SenderState *sender_state =
             safe_cast<DTLBPort::SenderState*>(translation_state->saved);
 
-        GEM5_VAR_USED Wavefront *w =
+        [[maybe_unused]] Wavefront *w =
             computeUnit->wfList[sender_state->_gpuDynInst->simdId]
             [sender_state->_gpuDynInst->wfSlotId];
 
@@ -1508,15 +1506,15 @@ ComputeUnit::DTLBPort::recvTimingResp(PacketPtr pkt)
 
             // Because it's atomic operation, only need TLB translation state
             prefetch_pkt->senderState =
-                new X86ISA::GpuTLB::TranslationState(TLB_mode,
+                new GpuTranslationState(TLB_mode,
                     computeUnit->shader->gpuTc, true);
 
             // Currently prefetches are zero-latency, hence the sendFunctional
             sendFunctional(prefetch_pkt);
 
             /* safe_cast the senderState */
-            X86ISA::GpuTLB::TranslationState *tlb_state =
-                 safe_cast<X86ISA::GpuTLB::TranslationState*>(
+            GpuTranslationState *tlb_state =
+                 safe_cast<GpuTranslationState*>(
                          prefetch_pkt->senderState);
 
 
@@ -1574,7 +1572,7 @@ ComputeUnit::DataPort::processMemReqEvent(PacketPtr pkt)
 {
     SenderState *sender_state = safe_cast<SenderState*>(pkt->senderState);
     GPUDynInstPtr gpuDynInst = sender_state->_gpuDynInst;
-    GEM5_VAR_USED ComputeUnit *compute_unit = computeUnit;
+    [[maybe_unused]] ComputeUnit *compute_unit = computeUnit;
 
     if (!(sendTimingReq(pkt))) {
         retries.push_back(std::make_pair(pkt, gpuDynInst));
@@ -1603,7 +1601,7 @@ ComputeUnit::ScalarDataPort::MemReqEvent::process()
 {
     SenderState *sender_state = safe_cast<SenderState*>(pkt->senderState);
     GPUDynInstPtr gpuDynInst = sender_state->_gpuDynInst;
-    GEM5_VAR_USED ComputeUnit *compute_unit = scalarDataPort.computeUnit;
+    [[maybe_unused]] ComputeUnit *compute_unit = scalarDataPort.computeUnit;
 
     if (!(scalarDataPort.sendTimingReq(pkt))) {
         scalarDataPort.retries.push_back(pkt);
@@ -1643,7 +1641,7 @@ ComputeUnit::DTLBPort::recvReqRetry()
 
     for (int i = 0; i < len; ++i) {
         PacketPtr pkt = retries.front();
-        GEM5_VAR_USED Addr vaddr = pkt->req->getVaddr();
+        [[maybe_unused]] Addr vaddr = pkt->req->getVaddr();
         DPRINTF(GPUTLB, "CU%d: retrying D-translaton for address%#x", vaddr);
 
         if (!sendTimingReq(pkt)) {
@@ -1663,8 +1661,8 @@ ComputeUnit::ScalarDTLBPort::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->senderState);
 
-    X86ISA::GpuTLB::TranslationState *translation_state =
-        safe_cast<X86ISA::GpuTLB::TranslationState*>(pkt->senderState);
+    GpuTranslationState *translation_state =
+        safe_cast<GpuTranslationState*>(pkt->senderState);
 
     // Page faults are not allowed
     fatal_if(!translation_state->tlbEntry,
@@ -1682,7 +1680,7 @@ ComputeUnit::ScalarDTLBPort::recvTimingResp(PacketPtr pkt)
     GPUDynInstPtr gpuDynInst = sender_state->_gpuDynInst;
     delete pkt->senderState;
 
-    GEM5_VAR_USED Wavefront *w = gpuDynInst->wavefront();
+    [[maybe_unused]] Wavefront *w = gpuDynInst->wavefront();
 
     DPRINTF(GPUTLB, "CU%d: WF[%d][%d][wv=%d]: scalar DTLB port received "
         "translation: PA %#x -> %#x\n", computeUnit->cu_id, w->simdId,
@@ -1721,15 +1719,15 @@ ComputeUnit::ScalarDTLBPort::recvTimingResp(PacketPtr pkt)
 bool
 ComputeUnit::ITLBPort::recvTimingResp(PacketPtr pkt)
 {
-    GEM5_VAR_USED Addr line = pkt->req->getPaddr();
+    [[maybe_unused]] Addr line = pkt->req->getPaddr();
     DPRINTF(GPUTLB, "CU%d: ITLBPort received %#x->%#x\n",
             computeUnit->cu_id, pkt->req->getVaddr(), line);
 
     assert(pkt->senderState);
 
     // pop off the TLB translation state
-    X86ISA::GpuTLB::TranslationState *translation_state
-        = safe_cast<X86ISA::GpuTLB::TranslationState*>(pkt->senderState);
+    GpuTranslationState *translation_state
+        = safe_cast<GpuTranslationState*>(pkt->senderState);
 
     bool success = translation_state->tlbEntry != nullptr;
     delete translation_state->tlbEntry;
@@ -1787,7 +1785,7 @@ ComputeUnit::ITLBPort::recvReqRetry()
 
     for (int i = 0; i < len; ++i) {
         PacketPtr pkt = retries.front();
-        GEM5_VAR_USED Addr vaddr = pkt->req->getVaddr();
+        [[maybe_unused]] Addr vaddr = pkt->req->getVaddr();
         DPRINTF(GPUTLB, "CU%d: retrying I-translaton for address%#x", vaddr);
 
         if (!sendTimingReq(pkt)) {
@@ -1829,6 +1827,8 @@ ComputeUnit::updateInstStats(GPUDynInstPtr gpuDynInst)
             } else {
                 stats.flatVMemInsts++;
             }
+        } else if (gpuDynInst->isFlatGlobal()) {
+            stats.flatVMemInsts++;
         } else if (gpuDynInst->isLocalMem()) {
             stats.ldsNoFlatInsts++;
         } else if (gpuDynInst->isLoad()) {
@@ -2040,7 +2040,7 @@ ComputeUnit::LDSPort::sendTimingReq(PacketPtr pkt)
             dynamic_cast<ComputeUnit::LDSPort::SenderState*>(pkt->senderState);
     fatal_if(!sender_state, "packet without a valid sender state");
 
-    GEM5_VAR_USED GPUDynInstPtr gpuDynInst = sender_state->getMemInst();
+    [[maybe_unused]] GPUDynInstPtr gpuDynInst = sender_state->getMemInst();
 
     if (isStalled()) {
         fatal_if(retries.empty(), "must have retries waiting to be stalled");

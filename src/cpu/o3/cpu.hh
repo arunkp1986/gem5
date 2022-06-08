@@ -49,8 +49,7 @@
 #include <set>
 #include <vector>
 
-#include "arch/generic/types.hh"
-#include "arch/pcstate.hh"
+#include "arch/generic/pcstate.hh"
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
 #include "cpu/o3/comm.hh"
@@ -124,7 +123,8 @@ class CPU : public BaseCPU
     EventFunctionWrapper threadExitEvent;
 
     /** Schedule tick event, regardless of its current state. */
-    void scheduleTickEvent(Cycles delay)
+    void
+    scheduleTickEvent(Cycles delay)
     {
         if (tickEvent.squashed())
             reschedule(tickEvent, clockEdge(delay));
@@ -133,7 +133,8 @@ class CPU : public BaseCPU
     }
 
     /** Unschedule tick event, regardless of its current state. */
-    void unscheduleTickEvent()
+    void
+    unscheduleTickEvent()
     {
         if (tickEvent.scheduled())
             tickEvent.squash();
@@ -193,8 +194,11 @@ class CPU : public BaseCPU
     void startup() override;
 
     /** Returns the Number of Active Threads in the CPU */
-    int numActiveThreads()
-    { return activeThreads.size(); }
+    int
+    numActiveThreads()
+    {
+        return activeThreads.size();
+    }
 
     /** Add Thread to Active Threads List */
     void activateThread(ThreadID tid);
@@ -275,25 +279,10 @@ class CPU : public BaseCPU
     void verifyMemoryMode() const override;
 
     /** Get the current instruction sequence number, and increment it. */
-    InstSeqNum getAndIncrementInstSeq()
-    { return globalSeqNum++; }
+    InstSeqNum getAndIncrementInstSeq() { return globalSeqNum++; }
 
     /** Traps to handle given fault. */
     void trap(const Fault &fault, ThreadID tid, const StaticInstPtr &inst);
-
-    /**
-     * Mark vector fields in scoreboard as ready right after switching
-     * vector mode, since software may read vectors at this time.
-     */
-    void setVectorsAsReady(ThreadID tid);
-
-    /** Check if a change in renaming is needed for vector registers.
-     * The vecMode variable is updated and propagated to rename maps.
-     *
-     * @param tid ThreadID
-     * @param freelist list of free registers
-     */
-    void switchRenameMode(ThreadID tid, UnifiedFreeList* freelist);
 
     /** Returns the Fault for any valid interrupt. */
     Fault getInterrupts();
@@ -333,14 +322,7 @@ class CPU : public BaseCPU
      */
     TheISA::VecRegContainer& getWritableVecReg(PhysRegIdPtr reg_idx);
 
-    /** Returns current vector renaming mode */
-    enums::VecRegRenameMode vecRenameMode() const { return vecMode; }
-
-    /** Sets the current vector renaming mode */
-    void vecRenameMode(enums::VecRegRenameMode vec_mode)
-    { vecMode = vec_mode; }
-
-    const TheISA::VecElem& readVecElem(PhysRegIdPtr reg_idx) const;
+    RegVal readVecElem(PhysRegIdPtr reg_idx) const;
 
     const TheISA::VecPredRegContainer&
         readVecPredReg(PhysRegIdPtr reg_idx) const;
@@ -355,7 +337,7 @@ class CPU : public BaseCPU
 
     void setVecReg(PhysRegIdPtr reg_idx, const TheISA::VecRegContainer& val);
 
-    void setVecElem(PhysRegIdPtr reg_idx, const TheISA::VecElem& val);
+    void setVecElem(PhysRegIdPtr reg_idx, RegVal val);
 
     void setVecPredReg(PhysRegIdPtr reg_idx,
             const TheISA::VecPredRegContainer& val);
@@ -371,7 +353,7 @@ class CPU : public BaseCPU
     /** Read architectural vector register for modification. */
     TheISA::VecRegContainer& getWritableArchVecReg(int reg_idx, ThreadID tid);
 
-    const TheISA::VecElem& readArchVecElem(const RegIndex& reg_idx,
+    RegVal readArchVecElem(const RegIndex& reg_idx,
             const ElemIndex& ldx, ThreadID tid) const;
 
     const TheISA::VecPredRegContainer& readArchVecPredReg(
@@ -398,24 +380,15 @@ class CPU : public BaseCPU
             ThreadID tid);
 
     void setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
-                        const TheISA::VecElem& val, ThreadID tid);
+                        RegVal val, ThreadID tid);
 
     void setArchCCReg(int reg_idx, RegVal val, ThreadID tid);
 
     /** Sets the commit PC state of a specific thread. */
-    void pcState(const TheISA::PCState &newPCState, ThreadID tid);
+    void pcState(const PCStateBase &new_pc_state, ThreadID tid);
 
     /** Reads the commit PC state of a specific thread. */
-    TheISA::PCState pcState(ThreadID tid);
-
-    /** Reads the commit PC of a specific thread. */
-    Addr instAddr(ThreadID tid);
-
-    /** Reads the commit micro PC of a specific thread. */
-    MicroPC microPC(ThreadID tid);
-
-    /** Reads the next PC of a specific thread. */
-    Addr nextInstAddr(ThreadID tid);
+    const PCStateBase &pcState(ThreadID tid);
 
     /** Initiates a squash of all in-flight instructions for a given
      * thread.  The source of the squash is an external update of
@@ -494,9 +467,6 @@ class CPU : public BaseCPU
     /** The commit stage. */
     Commit commit;
 
-    /** The rename mode of the vector registers */
-    enums::VecRegRenameMode vecMode;
-
     /** The register file. */
     PhysRegFile regFile;
 
@@ -569,12 +539,18 @@ class CPU : public BaseCPU
     void activityThisCycle() { activityRec.activity(); }
 
     /** Changes a stage's status to active within the activity recorder. */
-    void activateStage(const StageIdx idx)
-    { activityRec.activateStage(idx); }
+    void
+    activateStage(const StageIdx idx)
+    {
+        activityRec.activateStage(idx);
+    }
 
     /** Changes a stage's status to inactive within the activity recorder. */
-    void deactivateStage(const StageIdx idx)
-    { activityRec.deactivateStage(idx); }
+    void
+    deactivateStage(const StageIdx idx)
+    {
+        activityRec.deactivateStage(idx);
+    }
 
     /** Wakes the CPU, rescheduling the CPU if it's not already active. */
     void wakeCPU();
@@ -623,27 +599,15 @@ class CPU : public BaseCPU
     std::vector<ThreadID> tids;
 
     /** CPU pushRequest function, forwards request to LSQ. */
-    Fault pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
-                      unsigned int size, Addr addr, Request::Flags flags,
-                      uint64_t *res, AtomicOpFunctorPtr amo_op = nullptr,
-                      const std::vector<bool>& byte_enable =
-                          std::vector<bool>())
+    Fault
+    pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
+                unsigned int size, Addr addr, Request::Flags flags,
+                uint64_t *res, AtomicOpFunctorPtr amo_op = nullptr,
+                const std::vector<bool>& byte_enable=std::vector<bool>())
 
     {
         return iew.ldstQueue.pushRequest(inst, isLoad, data, size, addr,
                 flags, res, std::move(amo_op), byte_enable);
-    }
-
-    /** CPU read function, forwards read to LSQ. */
-    Fault read(LSQRequest* req, int load_idx)
-    {
-        return iew.ldstQueue.read(req, load_idx);
-    }
-
-    /** CPU write function, forwards write to LSQ. */
-    Fault write(LSQRequest* req, uint8_t *data, int store_idx)
-    {
-        return iew.ldstQueue.write(req, data, store_idx);
     }
 
     /** Used by the fetch unit to get a hold of the instruction port. */
@@ -708,7 +672,7 @@ class CPU : public BaseCPU
   public:
     // hardware transactional memory
     void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
-                            HtmFailureFaultCause cause);
+                            HtmFailureFaultCause cause) override;
 };
 
 } // namespace o3

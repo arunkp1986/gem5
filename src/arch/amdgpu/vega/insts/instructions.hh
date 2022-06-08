@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -24674,6 +24672,42 @@ namespace VegaISA
         void execute(GPUDynInstPtr) override;
     }; // Inst_VOP3__V_OR_B32
 
+    class Inst_VOP3__V_OR3_B32 : public Inst_VOP3A
+    {
+      public:
+        Inst_VOP3__V_OR3_B32(InFmt_VOP3A*);
+        ~Inst_VOP3__V_OR3_B32();
+
+        int
+        getNumOperands() override
+        {
+            return numDstRegOperands() + numSrcRegOperands();
+        } // getNumOperands
+
+        int numDstRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return 3; }
+
+        int
+        getOperandSize(int opIdx) override
+        {
+            switch (opIdx) {
+              case 0: //src_0
+                return 4;
+              case 1: //src_1
+                return 4;
+              case 2: //src_2
+                return 4;
+              case 3: //vdst
+                return 4;
+              default:
+                fatal("op idx %i out of bounds\n", opIdx);
+                return -1;
+            }
+        } // getOperandSize
+
+        void execute(GPUDynInstPtr) override;
+    }; // Inst_VOP3__V_OR_B32
+
     class Inst_VOP3__V_XOR_B32 : public Inst_VOP3A
     {
       public:
@@ -29459,6 +29493,186 @@ namespace VegaISA
 
         void execute(GPUDynInstPtr) override;
     }; // Inst_VOP3__V_MAD_I64_I32
+
+    class Inst_VOP3__V_LSHL_ADD_U32 : public Inst_VOP3A
+    {
+      public:
+        Inst_VOP3__V_LSHL_ADD_U32(InFmt_VOP3A*);
+        ~Inst_VOP3__V_LSHL_ADD_U32();
+
+        int
+        getNumOperands() override
+        {
+            return numDstRegOperands() + numSrcRegOperands();
+        } // getNumOperands
+
+        int numDstRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return 3; }
+
+        int
+        getOperandSize(int opIdx) override
+        {
+            switch (opIdx) {
+              case 0: //src_0
+                return 4;
+              case 1: //src_1
+                return 4;
+              case 2: //src_2
+                return 4;
+              case 3: //vdst
+                return 4;
+              default:
+                fatal("op idx %i out of bounds\n", opIdx);
+                return -1;
+            }
+        } // getOperandSize
+
+        void execute(GPUDynInstPtr) override;
+    }; // Inst_VOP3__V_LSHL_ADD_U32
+
+    class Inst_VOP3__V_ADD_LSHL_U32 : public Inst_VOP3A
+    {
+      public:
+        Inst_VOP3__V_ADD_LSHL_U32(InFmt_VOP3A*);
+        ~Inst_VOP3__V_ADD_LSHL_U32();
+
+        int
+        getNumOperands() override
+        {
+            return numDstRegOperands() + numSrcRegOperands();
+        } // getNumOperands
+
+        int numDstRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return 3; }
+
+        int
+        getOperandSize(int opIdx) override
+        {
+            switch (opIdx) {
+              case 0: //src_0
+                return 4;
+              case 1: //src_1
+                return 4;
+              case 2: //src_2
+                return 4;
+              case 3: //vdst
+                return 4;
+              default:
+                fatal("op idx %i out of bounds\n", opIdx);
+                return -1;
+            }
+        } // getOperandSize
+
+        void execute(GPUDynInstPtr) override;
+    }; // Inst_VOP3__V_ADD_LSHL_U32
+
+    class Inst_VOP3__V_ADD3_U32 : public Inst_VOP3A
+    {
+      public:
+        Inst_VOP3__V_ADD3_U32(InFmt_VOP3A*);
+        ~Inst_VOP3__V_ADD3_U32();
+
+        int
+        getNumOperands() override
+        {
+            return numDstRegOperands() + numSrcRegOperands();
+        } // getNumOperands
+
+        int numDstRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return 3; }
+
+        int
+        getOperandSize(int opIdx) override
+        {
+            switch (opIdx) {
+              case 0: //src_0
+                return 4;
+              case 1: //src_1
+                return 4;
+              case 2: //src_2
+                return 4;
+              case 3: //vdst
+                return 4;
+              default:
+                fatal("op idx %i out of bounds\n", opIdx);
+                return -1;
+            }
+        } // getOperandSize
+
+        void execute(GPUDynInstPtr) override;
+    }; // Inst_VOP3__V_ADD3_U32
+
+    class Inst_VOP3__V_LSHL_OR_B32 : public Inst_VOP3A
+    {
+      public:
+        Inst_VOP3__V_LSHL_OR_B32(InFmt_VOP3A*);
+        ~Inst_VOP3__V_LSHL_OR_B32();
+
+        int
+        getNumOperands() override
+        {
+            return numDstRegOperands() + numSrcRegOperands();
+        } // getNumOperands
+
+        int numDstRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return 3; }
+
+        int
+        getOperandSize(int opIdx) override
+        {
+            switch (opIdx) {
+              case 0: //src_0
+                return 4;
+              case 1: //src_1
+                return 4;
+              case 2: //src_2
+                return 4;
+              case 3: //vdst
+                return 4;
+              default:
+                fatal("op idx %i out of bounds\n", opIdx);
+                return -1;
+            }
+        } // getOperandSize
+
+        void execute(GPUDynInstPtr) override;
+    }; // Inst_VOP3__V_LSHL_OR_B32
+
+    class Inst_VOP3__V_AND_OR_B32 : public Inst_VOP3A
+    {
+      public:
+        Inst_VOP3__V_AND_OR_B32(InFmt_VOP3A*);
+        ~Inst_VOP3__V_AND_OR_B32();
+
+        int
+        getNumOperands() override
+        {
+            return numDstRegOperands() + numSrcRegOperands();
+        } // getNumOperands
+
+        int numDstRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return 3; }
+
+        int
+        getOperandSize(int opIdx) override
+        {
+            switch (opIdx) {
+              case 0: //src_0
+                return 4;
+              case 1: //src_1
+                return 4;
+              case 2: //src_2
+                return 4;
+              case 3: //vdst
+                return 4;
+              default:
+                fatal("op idx %i out of bounds\n", opIdx);
+                return -1;
+            }
+        } // getOperandSize
+
+        void execute(GPUDynInstPtr) override;
+    }; // Inst_VOP3__V_AND_OR_B32
 
     class Inst_VOP3__V_MAD_F16 : public Inst_VOP3A
     {
@@ -41445,7 +41659,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41453,7 +41667,10 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 1 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
                 return 1;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41479,7 +41696,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41487,8 +41704,11 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
-                return 32;
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 1 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
+                return 1;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41513,7 +41733,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41521,7 +41741,10 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 2 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
                 return 2;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41547,7 +41770,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41555,8 +41778,11 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
-                return 32;
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 2 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
+                return 2;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41581,7 +41807,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41589,7 +41815,10 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
                 return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41615,7 +41844,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41623,7 +41852,10 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41649,7 +41881,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41657,7 +41889,10 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 12 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
                 return 12;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41683,7 +41918,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 1; }
+        int numSrcRegOperands() override { return isFlat() ? 1 : 2; }
 
         int
         getOperandSize(int opIdx) override
@@ -41691,7 +41926,10 @@ namespace VegaISA
             switch (opIdx) {
               case 0: //vgpr_addr
                 return 8;
-              case 1: //vgpr_dst
+              case 1: //vgpr_dst or saddr
+                return isFlat() ? 16 : 8;
+              case 2: //vgpr_dst
+                assert(!isFlat());
                 return 16;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41717,7 +41955,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 0; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41727,6 +41965,9 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 1;
+              case 2: //saddr
+                assert(!isFlat());
+                return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41751,7 +41992,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 0; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41761,6 +42002,9 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 2;
+              case 2: //saddr
+                assert(!isFlat());
+                return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41785,7 +42029,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 0; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41795,6 +42039,9 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 4;
+              case 2: //saddr
+                assert(!isFlat());
+                return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41819,7 +42066,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 0; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41828,6 +42075,9 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
+                return 8;
+              case 2: //saddr
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41853,7 +42103,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 0; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41863,6 +42113,9 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 12;
+              case 2: //saddr
+                assert(!isFlat());
+                return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41887,7 +42140,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 0; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41897,6 +42150,9 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 16;
+              case 2: //saddr
+                assert(!isFlat());
+                return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -41921,7 +42177,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41931,7 +42187,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 4;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41957,7 +42216,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -41967,7 +42226,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -41993,7 +42255,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42003,7 +42265,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 4;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42029,7 +42294,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42038,9 +42303,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42063,7 +42331,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42072,9 +42340,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42097,7 +42368,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42106,9 +42377,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42131,7 +42405,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42140,9 +42414,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42165,7 +42442,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42174,9 +42451,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42199,7 +42479,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42208,9 +42488,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42233,7 +42516,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42242,9 +42525,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42267,7 +42553,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42276,9 +42562,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42301,7 +42590,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42310,9 +42599,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42335,7 +42627,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42344,9 +42636,12 @@ namespace VegaISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
-              case 2: //vgpr_dst
-                return 32;
+                return 4;
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 4 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -42369,7 +42664,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42379,7 +42674,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42403,7 +42701,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42413,7 +42711,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 16;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42439,7 +42740,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42449,7 +42750,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42475,7 +42779,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42485,7 +42789,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42509,7 +42816,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42519,7 +42826,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42543,7 +42853,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42553,7 +42863,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42577,7 +42890,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42587,7 +42900,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42611,7 +42927,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42621,7 +42937,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42645,7 +42964,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42655,7 +42974,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42679,7 +43001,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42689,7 +43011,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42713,7 +43038,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42723,7 +43048,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42747,7 +43075,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42757,7 +43085,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -42781,7 +43112,7 @@ namespace VegaISA
         } // getNumOperands
 
         int numDstRegOperands() override { return 1; }
-        int numSrcRegOperands() override { return 2; }
+        int numSrcRegOperands() override { return isFlat() ? 2 : 3; }
 
         int
         getOperandSize(int opIdx) override
@@ -42791,7 +43122,10 @@ namespace VegaISA
                 return 8;
               case 1: //vgpr_src
                 return 8;
-              case 2: //vgpr_dst
+              case 2: //vgpr_dst or saddr
+                return isFlat() ? 8 : 8;
+              case 3: //vgpr_dst
+                assert(!isFlat());
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);

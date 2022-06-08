@@ -1090,6 +1090,12 @@ class Packet : public Printable
         this->cmd = _cmd;
     }
 
+    void
+    setTflag()
+    {
+        flags.set(DYNAMIC_DATA);;
+    }
+
 
     void
     setSize(unsigned size)
@@ -1329,7 +1335,7 @@ class Packet : public Printable
             assert(req->getByteEnable().size() == getSize());
             // Write only the enabled bytes
             const uint8_t *base = getConstPtr<uint8_t>();
-            for (int i = 0; i < getSize(); i++) {
+            for (unsigned int i = 0; i < getSize(); i++) {
                 if (req->getByteEnable()[i]) {
                     p[i] = *(base + i);
                 }
@@ -1363,6 +1369,15 @@ class Packet : public Printable
         flags.clear(STATIC_DATA|DYNAMIC_DATA);
         data = NULL;
     }
+
+    void
+    deleteTData()
+    {
+        delete [] data;
+        //flags.clear(STATIC_DATA|DYNAMIC_DATA);
+        //data = NULL;
+    }
+
 
     /** Allocate memory for the packet. */
     void

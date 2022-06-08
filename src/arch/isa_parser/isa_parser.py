@@ -44,7 +44,7 @@ import traceback
 # get type names
 from types import *
 
-from m5.util.grammar import Grammar
+from grammar import Grammar
 from .operand_list import *
 from .operand_types import *
 from .util import *
@@ -121,9 +121,11 @@ class Template(object):
             &std::remove_pointer_t<decltype(this)>::destRegIdxArr));
             '''
 
+            pcstate_decl = f'{self.parser.namespace}::PCState ' \
+                    '__parserAutoPCState;\n'
             myDict['op_decl'] = operands.concatAttrStrings('op_decl')
             if operands.readPC or operands.setPC:
-                myDict['op_decl'] += 'TheISA::PCState __parserAutoPCState;\n'
+                myDict['op_decl'] += pcstate_decl
 
             # In case there are predicated register reads and write, declare
             # the variables for register indicies. It is being assumed that
@@ -133,7 +135,8 @@ class Template(object):
             if operands.predRead:
                 myDict['op_decl'] += 'uint8_t _sourceIndex = 0;\n'
             if operands.predWrite:
-                myDict['op_decl'] += 'GEM5_VAR_USED uint8_t _destIndex = 0;\n'
+                myDict['op_decl'] += \
+                    '[[maybe_unused]] uint8_t _destIndex = 0;\n'
 
             is_src = lambda op: op.is_src
             is_dest = lambda op: op.is_dest
@@ -143,15 +146,14 @@ class Template(object):
             myDict['op_dest_decl'] = \
                       operands.concatSomeAttrStrings(is_dest, 'op_dest_decl')
             if operands.readPC:
-                myDict['op_src_decl'] += \
-                    'TheISA::PCState __parserAutoPCState;\n'
+                myDict['op_src_decl'] += pcstate_decl
             if operands.setPC:
-                myDict['op_dest_decl'] += \
-                    'TheISA::PCState __parserAutoPCState;\n'
+                myDict['op_dest_decl'] += pcstate_decl
 
             myDict['op_rd'] = operands.concatAttrStrings('op_rd')
             if operands.readPC:
-                myDict['op_rd'] = '__parserAutoPCState = xc->pcState();\n' + \
+                myDict['op_rd'] = \
+                        'set(__parserAutoPCState, xc->pcState());\n' + \
                                   myDict['op_rd']
 
             # Compose the op_wb string. If we're going to write back the
@@ -463,8 +465,6 @@ class InstObjParams(object):
         # function (which should be provided by isa_desc via a declare)
         if 'IsFloating' in self.flags:
             self.fp_enable_check = 'fault = checkFpEnableFault(xc);'
-        elif 'IsVector' in self.flags:
-            self.fp_enable_check = 'fault = checkVecEnableFault(xc);'
         else:
             self.fp_enable_check = ''
 
@@ -483,7 +483,7 @@ class InstObjParams(object):
 
 class ISAParser(Grammar):
     def __init__(self, output_dir):
-        super(ISAParser, self).__init__()
+        super().__init__()
         self.output_dir = output_dir
 
         self.filename = None # for output file watermarking/scaremongering
@@ -1437,8 +1437,7 @@ StaticInstPtr
         # Create a wrapper class that allows us to grab the current parser.
         class InstObjParamsWrapper(InstObjParams):
             def __init__(iop, *args, **kwargs):
-                super(InstObjParamsWrapper, iop).__init__(
-                        self, *args, **kwargs)
+                super().__init__(self, *args, **kwargs)
         self.exportContext['InstObjParams'] = InstObjParamsWrapper
         self.exportContext.update(self.templateMap)
 

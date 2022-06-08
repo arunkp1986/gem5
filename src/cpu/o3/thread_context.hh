@@ -112,7 +112,7 @@ class ThreadContext : public gem5::ThreadContext
         return cpu->isa[thread->threadId()];
     }
 
-    TheISA::Decoder *
+    InstDecoder *
     getDecoderPtr() override
     {
         return cpu->fetch.decoder[thread->threadId()];
@@ -142,14 +142,6 @@ class ThreadContext : public gem5::ThreadContext
     Process *getProcessPtr() override { return thread->getProcessPtr(); }
 
     void setProcessPtr(Process *p) override { thread->setProcessPtr(p); }
-
-    PortProxy &getVirtProxy() override;
-
-    void
-    initMemProxies(gem5::ThreadContext *tc) override
-    {
-        thread->initMemProxies(tc);
-    }
 
     /** Returns this thread's status. */
     Status status() const override { return thread->status(); }
@@ -220,7 +212,7 @@ class ThreadContext : public gem5::ThreadContext
         return getWritableVecRegFlat(flattenRegId(id).index());
     }
 
-    const TheISA::VecElem &
+    RegVal
     readVecElem(const RegId& reg) const override
     {
         return readVecElemFlat(flattenRegId(reg).index(), reg.elemIndex());
@@ -266,7 +258,7 @@ class ThreadContext : public gem5::ThreadContext
     }
 
     void
-    setVecElem(const RegId& reg, const TheISA::VecElem& val) override
+    setVecElem(const RegId& reg, RegVal val) override
     {
         setVecElemFlat(flattenRegId(reg).index(), reg.elemIndex(), val);
     }
@@ -285,37 +277,16 @@ class ThreadContext : public gem5::ThreadContext
     }
 
     /** Reads this thread's PC state. */
-    TheISA::PCState
+    const PCStateBase &
     pcState() const override
     {
         return cpu->pcState(thread->threadId());
     }
 
     /** Sets this thread's PC state. */
-    void pcState(const TheISA::PCState &val) override;
+    void pcState(const PCStateBase &val) override;
 
-    void pcStateNoRecord(const TheISA::PCState &val) override;
-
-    /** Reads this thread's PC. */
-    Addr
-    instAddr() const override
-    {
-        return cpu->instAddr(thread->threadId());
-    }
-
-    /** Reads this thread's next PC. */
-    Addr
-    nextInstAddr() const override
-    {
-        return cpu->nextInstAddr(thread->threadId());
-    }
-
-    /** Reads this thread's next PC. */
-    MicroPC
-    microPC() const override
-    {
-        return cpu->microPC(thread->threadId());
-    }
+    void pcStateNoRecord(const PCStateBase &val) override;
 
     /** Reads a miscellaneous register. */
     RegVal
@@ -380,10 +351,10 @@ class ThreadContext : public gem5::ThreadContext
     void setVecRegFlat(RegIndex idx,
             const TheISA::VecRegContainer& val) override;
 
-    const TheISA::VecElem &readVecElemFlat(RegIndex idx,
+    RegVal readVecElemFlat(RegIndex idx,
             const ElemIndex& elemIndex) const override;
     void setVecElemFlat(RegIndex idx, const ElemIndex& elemIdx,
-                        const TheISA::VecElem& val) override;
+                        RegVal val) override;
 
     const TheISA::VecPredRegContainer&
         readVecPredRegFlat(RegIndex idx) const override;

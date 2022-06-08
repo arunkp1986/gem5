@@ -46,7 +46,9 @@ class SEWorkload : public gem5::SEWorkload
   public:
     using Params = MipsSEWorkloadParams;
 
-    SEWorkload(const Params &p) : gem5::SEWorkload(p) {}
+    SEWorkload(const Params &p, Addr page_shift) :
+        gem5::SEWorkload(p, page_shift)
+    {}
 
     void
     setSystem(System *sys) override
@@ -75,9 +77,6 @@ struct Result<MipsISA::SEWorkload::SyscallABI, SyscallReturn>
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
     {
-        if (ret.suppressed() || ret.needsRetry())
-            return;
-
         if (ret.successful()) {
             // no error
             tc->setIntReg(MipsISA::SyscallSuccessReg, 0);

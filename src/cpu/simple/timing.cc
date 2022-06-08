@@ -46,7 +46,7 @@
 
 #include <csignal>
 
-#include "arch/locked_mem.hh"
+#include "arch/generic/decoder.hh"
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/regs/msr.hh"
 #include "base/compiler.hh"
@@ -180,7 +180,7 @@ void
 TimingSimpleCPU::switchOut()
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
-    GEM5_VAR_USED SimpleThread* thread = t_info.thread;
+    [[maybe_unused]] SimpleThread* thread = t_info.thread;
 
     // hardware transactional memory
     // Cannot switch out the CPU in the middle of a transaction
@@ -191,7 +191,7 @@ TimingSimpleCPU::switchOut()
     assert(!fetchEvent.scheduled());
     assert(_status == BaseSimpleCPU::Running || _status == Idle);
     assert(!t_info.stayAtPC);
-    assert(thread->microPC() == 0);
+    assert(thread->pcState().microPC() == 0);
 
     updateCycleCounts();
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
@@ -285,7 +285,7 @@ TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
     // We're about the issues a locked load, so tell the monitor
     // to start caring about this address
     if (pkt->isRead() && pkt->req->isLLSC()) {
-        TheISA::handleLockedRead(thread, pkt->req);
+        thread->getIsaPtr()->handleLockedRead(pkt->req);
     }
     if (req->isLocalAccess()) {
         Cycles delay = req->localAccessor(thread->getTC(), pkt);
@@ -376,6 +376,11 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                                 min_address);
                 min_address = 0xFFFFFFFFFF;
                 comparator_flush();
+                comparator_list.erase(comparator_list.begin(),
+                                comparator_list.end());
+                dirty_packet.erase(dirty_packet.begin(), dirty_packet.end());
+                dirty_count.erase(dirty_count.begin(), dirty_count.end());
+                dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
                 handleReadPacket(pkt);
             }
             /* Reads to bitmap area other than the initiator read
@@ -411,7 +416,8 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         bool do_access = true;  // flag to suppress cache access
 
         if (req->isLLSC()) {
-            do_access = TheISA::handleLockedWrite(thread, req, dcachePort.cacheBlockMask);
+            do_access = thread->getIsaPtr()->handleLockedWrite(
+                    req, dcachePort.cacheBlockMask);
         } else if (req->isCondSwap()) {
             assert(res);
             req->setExtraData(*res);
@@ -546,7 +552,7 @@ TimingSimpleCPU::initiateMemRead(Addr addr, unsigned size,
     SimpleThread* thread = t_info.thread;
 
     Fault fault;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     unsigned block_size = cacheLineSize();
     BaseMMU::Mode mode = BaseMMU::Read;
 
@@ -635,6 +641,8 @@ TimingSimpleCPU::comparator_flush(){
         value = (dirty_lookup[dirty_address]).second;
         if (!value){
             it = dirty_lookup.erase(it);
+            dirty_packet[dirty_address]->deleteTData();
+            delete dirty_packet[dirty_address];
             dirty_packet.erase(dirty_address);
             dirty_count.erase(dirty_address);
             continue;
@@ -683,6 +691,8 @@ TimingSimpleCPU::comparator_selective_flush(){
             value = (dirty_lookup[dirty_address]).second;
             if (!value){
                 it = dirty_lookup.erase(it);
+                dirty_packet[dirty_address]->deleteTData();
+                delete dirty_packet[dirty_address];
                 dirty_packet.erase(dirty_address);
                 dirty_count.erase(dirty_address);
                 continue;
@@ -798,15 +808,15 @@ TimingSimpleCPU::comparator(){
             dirty_count[dirty_address] = 0;
             (dirty_lookup[dirty_address]).first = 0;
             (dirty_lookup[dirty_address]).second =\
-                        (1<<(31-(dirty_bit_pos%32)));
+                        (1<<(dirty_bit_pos%32));
             dirty_count[dirty_address] += 1;
         }
         else{
             /*set bit only if its not set previously*/
             if (!((dirty_lookup[dirty_address]).second &\
-                   (1<<(31-(dirty_bit_pos%32))))){
+                   (1<<(dirty_bit_pos%32)))){
                 (dirty_lookup[dirty_address]).second |=\
-                         (1<<(31-(dirty_bit_pos%32)));
+                         (1<<(dirty_bit_pos%32));
                 dirty_count[dirty_address] += 1;
             }
             if (dirty_count[dirty_address] == HIGH_WATERMARK)
@@ -849,7 +859,7 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
     uint8_t *newData = new uint8_t[size];
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     unsigned block_size = cacheLineSize();
     BaseMMU::Mode mode = BaseMMU::Write;
 
@@ -912,7 +922,7 @@ TimingSimpleCPU::initiateMemAMO(Addr addr, unsigned size,
     SimpleThread* thread = t_info.thread;
 
     Fault fault;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     unsigned block_size = cacheLineSize();
     BaseMMU::Mode mode = BaseMMU::Write;
 
@@ -959,7 +969,7 @@ TimingSimpleCPU::threadSnoop(PacketPtr pkt, ThreadID sender)
             if (getCpuAddrMonitor(tid)->doMonitor(pkt)) {
                 wakeup(tid);
             }
-            TheISA::handleLockedSnoop(threadInfo[tid]->thread, pkt,
+            threadInfo[tid]->thread->getIsaPtr()->handleLockedSnoop(pkt,
                     dcachePort.cacheBlockMask);
         }
     }
@@ -1011,9 +1021,8 @@ TimingSimpleCPU::fetch()
     if (_status == Idle)
         return;
 
-    TheISA::PCState pcState = thread->pcState();
-    bool needToFetch = !isRomMicroPC(pcState.microPC()) &&
-                       !curMacroStaticInst;
+    MicroPC upc = thread->pcState().microPC();
+    bool needToFetch = !isRomMicroPC(upc) && !curMacroStaticInst;
 
     if (needToFetch) {
         _status = BaseSimpleCPU::Running;
@@ -1044,7 +1053,7 @@ TimingSimpleCPU::sendFetch(const Fault &fault, const RequestPtr &req,
         DPRINTF(SimpleCPU, "Sending fetch for addr %#x(pa: %#x)\n",
                 req->getVaddr(), req->getPaddr());
         ifetch_pkt = new Packet(req, MemCmd::ReadReq);
-        ifetch_pkt->dataStatic(decoder.moreBytesPtr());
+        ifetch_pkt->dataStatic(decoder->moreBytesPtr());
         DPRINTF(SimpleCPU, " -- pkt addr: %#x\n", ifetch_pkt->getAddr());
 
         if (!icachePort.sendTimingReq(ifetch_pkt)) {
@@ -1269,7 +1278,7 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     // hardware transactional memory
 
     SimpleExecContext *t_info = threadInfo[curThread];
-    GEM5_VAR_USED const bool is_htm_speculative =
+    [[maybe_unused]] const bool is_htm_speculative =
         t_info->inHtmTransactionalState();
 
     // received a response from the dcache: complete the load or store
@@ -1425,7 +1434,8 @@ TimingSimpleCPU::DcachePort::recvTimingSnoopReq(PacketPtr pkt)
     // It is not necessary to wake up the processor on all incoming packets
     if (pkt->isInvalidate() || pkt->isWrite()) {
         for (auto &t_info : cpu->threadInfo) {
-            TheISA::handleLockedSnoop(t_info->thread, pkt, cacheBlockMask);
+            t_info->thread->getIsaPtr()->handleLockedSnoop(pkt,
+                    cacheBlockMask);
         }
     }
 }
@@ -1458,6 +1468,7 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
     tracker_pkt->setData(bitmap_value);
     tracker_pkt->setTcmd(MemCmd::WriteReq);
     tracker_pkt->setTracker(1);
+    tracker_pkt->setTflag();
     if (!sendTimingReq(tracker_pkt)) {
         std::cout<<"sending failed create_comparator_write\n"<<std::endl;
         cpu->_trackerstatus = DcacheTrackerRetry;
@@ -1482,13 +1493,20 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
         if (pkt->isRead()){
             PacketPtr tracker_write_pkt = new Packet(pkt,0,1);
             create_comparator_write(tracker_write_pkt,0);
+            pkt->setTflag();
+            //clear_pkt[tracker_write_pkt] = pkt;
+            //create_comparator_write(pkt,0);
         }
         if (pkt->isWrite()){
              cpu->dirty_tracking_done += 1;
+             //clear_pkt[pkt]->deleteTData();
+             //delete clear_pkt[pkt];
+             //clear_pkt.erase(pkt);
+             //pkt->deleteTData();
+             //delete pkt;
              //std::cout<<"WResp Address: "<<pkt->getAddr()<<std::endl;
         }
         //std::cout<<"got tracker packet"<<std::endl;
-        //delete pkt;
         return true;
     }
 
@@ -1638,7 +1656,7 @@ TimingSimpleCPU::initiateHtmCmd(Request::Flags flags)
     SimpleThread* thread = t_info.thread;
 
     const Addr addr = 0x0ul;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     const int size = 8;
 
     if (traceData)
@@ -1677,13 +1695,14 @@ TimingSimpleCPU::initiateHtmCmd(Request::Flags flags)
 }
 
 void
-TimingSimpleCPU::htmSendAbortSignal(HtmFailureFaultCause cause)
+TimingSimpleCPU::htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
+                                    HtmFailureFaultCause cause)
 {
-    SimpleExecContext& t_info = *threadInfo[curThread];
+    SimpleExecContext& t_info = *threadInfo[tid];
     SimpleThread* thread = t_info.thread;
 
     const Addr addr = 0x0ul;
-    const Addr pc = thread->instAddr();
+    const Addr pc = thread->pcState().instAddr();
     const int size = 8;
     const Request::Flags flags =
         Request::PHYSICAL|Request::STRICT_ORDER|Request::HTM_ABORT;

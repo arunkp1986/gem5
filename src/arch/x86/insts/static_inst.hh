@@ -38,9 +38,11 @@
 #ifndef __ARCH_X86_INSTS_STATICINST_HH__
 #define __ARCH_X86_INSTS_STATICINST_HH__
 
+#include "arch/x86/pcstate.hh"
 #include "arch/x86/types.hh"
 #include "base/trace.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
 #include "debug/X86.hh"
 
 namespace gem5
@@ -198,17 +200,26 @@ class X86StaticInst : public StaticInst
     }
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
-        pcState.advance();
+        pcState.as<PCState>().advance();
     }
 
-    PCState
-    buildRetPC(const PCState &curPC, const PCState &callPC) const override
+    void
+    advancePC(ThreadContext *tc) const override
     {
-        PCState retPC = callPC;
-        retPC.uEnd();
-        return retPC;
+        PCState pc = tc->pcState().as<PCState>();
+        pc.advance();
+        tc->pcState(pc);
+    }
+
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
+    {
+        PCStateBase *ret_pc_ptr = call_pc.clone();
+        ret_pc_ptr->as<PCState>().uEnd();
+        return std::unique_ptr<PCStateBase>{ret_pc_ptr};
     }
 };
 

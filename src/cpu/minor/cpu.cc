@@ -58,12 +58,12 @@ MinorCPU::MinorCPU(const MinorCPUParams &params) :
     for (ThreadID i = 0; i < numThreads; i++) {
         if (FullSystem) {
             thread = new minor::MinorThread(this, i, params.system,
-                    params.mmu, params.isa[i]);
+                    params.mmu, params.isa[i], params.decoder[i]);
             thread->setStatus(ThreadContext::Halted);
         } else {
             thread = new minor::MinorThread(this, i, params.system,
                     params.workload[i], params.mmu,
-                    params.isa[i]);
+                    params.isa[i], params.decoder[i]);
         }
 
         threads.push_back(thread);
@@ -75,8 +75,6 @@ MinorCPU::MinorCPU(const MinorCPUParams &params) :
     if (params.checker) {
         fatal("The Minor model doesn't support checking (yet)\n");
     }
-
-    minor::MinorDynInst::init();
 
     pipeline = new minor::Pipeline(*this, params);
     activityRecorder = pipeline->getActivityRecorder();
@@ -101,18 +99,9 @@ MinorCPU::init()
 {
     BaseCPU::init();
 
-    if (!params().switched_out &&
-        system->getMemoryMode() != enums::timing)
-    {
+    if (!params().switched_out && system->getMemoryMode() != enums::timing) {
         fatal("The Minor CPU requires the memory system to be in "
             "'timing' mode.\n");
-    }
-
-    /* Initialise the ThreadContext's memory proxies */
-    for (ThreadID thread_id = 0; thread_id < threads.size(); thread_id++) {
-        ThreadContext *tc = getContext(thread_id);
-
-        tc->initMemProxies(tc);
     }
 }
 

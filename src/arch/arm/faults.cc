@@ -314,8 +314,8 @@ ArmFault::getVector(ThreadContext *tc)
 
     // Check for invalid modes
     CPSR cpsr = tc->readMiscRegNoEffect(MISCREG_CPSR);
-    assert(ArmSystem::haveSecurity(tc) || cpsr.mode != MODE_MON);
-    assert(ArmSystem::haveVirtualization(tc) || cpsr.mode != MODE_HYP);
+    assert(ArmSystem::haveEL(tc, EL3) || cpsr.mode != MODE_MON);
+    assert(ArmSystem::haveEL(tc, EL2) || cpsr.mode != MODE_HYP);
 
     switch (cpsr.mode)
     {
@@ -330,7 +330,7 @@ ArmFault::getVector(ThreadContext *tc)
         if (sctlr.v) {
             base = HighVecs;
         } else {
-            base = ArmSystem::haveSecurity(tc) ?
+            base = ArmSystem::haveEL(tc, EL3) ?
                 tc->readMiscReg(MISCREG_VBAR) : 0;
         }
         break;
@@ -345,11 +345,11 @@ ArmFault::getVector64(ThreadContext *tc)
     Addr vbar;
     switch (toEL) {
       case EL3:
-        assert(ArmSystem::haveSecurity(tc));
+        assert(ArmSystem::haveEL(tc, EL3));
         vbar = tc->readMiscReg(MISCREG_VBAR_EL3);
         break;
       case EL2:
-        assert(ArmSystem::haveVirtualization(tc));
+        assert(ArmSystem::haveEL(tc, EL2));
         vbar = tc->readMiscReg(MISCREG_VBAR_EL2);
         break;
       case EL1:
@@ -448,10 +448,10 @@ ArmFault::update(ThreadContext *tc)
 
     // Determine target exception level (aarch64) or target execution
     // mode (aarch32).
-    if (ArmSystem::haveSecurity(tc) && routeToMonitor(tc)) {
+    if (ArmSystem::haveEL(tc, EL3) && routeToMonitor(tc)) {
         toMode = MODE_MON;
         toEL = EL3;
-    } else if (ArmSystem::haveVirtualization(tc) && routeToHyp(tc)) {
+    } else if (ArmSystem::haveEL(tc, EL2) && routeToHyp(tc)) {
         toMode = MODE_HYP;
         toEL = EL2;
         hypRouted = true;
@@ -494,23 +494,36 @@ ArmFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
     // be handled in AArch64 mode (to64).
     update(tc);
 
+    if (from64 != to64) {
+        // Switching modes, sync up versions of the vector register file.
+        if (from64) {
+            syncVecRegsToElems(tc);
+        } else {
+            syncVecElemsToRegs(tc);
+        }
+    }
+
     if (to64) {
         // Invoke exception handler in AArch64 state
         invoke64(tc, inst);
-        return;
+    } else {
+        // Invoke exception handler in AArch32 state
+        invoke32(tc, inst);
     }
+}
 
+void
+ArmFault::invoke32(ThreadContext *tc, const StaticInstPtr &inst)
+{
     if (vectorCatch(tc, inst))
         return;
 
     // ARMv7 (ARM ARM issue C B1.9)
-
-    bool have_security       = ArmSystem::haveSecurity(tc);
+    bool have_security = ArmSystem::haveEL(tc, EL3);
 
     FaultBase::invoke(tc);
     if (!FullSystem)
         return;
-    countStat()++;
 
     SCTLR sctlr = tc->readMiscReg(MISCREG_SCTLR);
     SCR scr = tc->readMiscReg(MISCREG_SCR);
@@ -520,15 +533,15 @@ ArmFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
     saved_cpsr.v = tc->readCCReg(CCREG_V);
     saved_cpsr.ge = tc->readCCReg(CCREG_GE);
 
-    GEM5_VAR_USED Addr curPc = tc->pcState().pc();
-    ITSTATE it = tc->pcState().itstate();
+    [[maybe_unused]] Addr cur_pc = tc->pcState().as<PCState>().pc();
+    ITSTATE it = tc->pcState().as<PCState>().itstate();
     saved_cpsr.it2 = it.top6;
     saved_cpsr.it1 = it.bottom2;
 
     // if we have a valid instruction then use it to annotate this fault with
     // extra information. This is used to generate the correct fault syndrome
     // information
-    GEM5_VAR_USED ArmStaticInst *arm_inst = instrAnnotate(inst);
+    [[maybe_unused]] ArmStaticInst *arm_inst = instrAnnotate(inst);
 
     // Ensure Secure state if initially in Monitor mode
     if (have_security && saved_cpsr.mode == MODE_MON) {
@@ -578,10 +591,10 @@ ArmFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
     tc->setMiscReg(MISCREG_LOCKFLAG, 0);
 
     if (cpsr.mode == MODE_HYP) {
-        tc->setMiscReg(MISCREG_ELR_HYP, curPc +
+        tc->setMiscReg(MISCREG_ELR_HYP, cur_pc +
                 (saved_cpsr.t ? thumbPcOffset(true)  : armPcOffset(true)));
     } else {
-        tc->setIntReg(INTREG_LR, curPc +
+        tc->setIntReg(INTREG_LR, cur_pc +
                 (saved_cpsr.t ? thumbPcOffset(false) : armPcOffset(false)));
     }
 
@@ -608,7 +621,7 @@ ArmFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
             setSyndrome(tc, MISCREG_HSR);
         break;
       case MODE_HYP:
-        assert(ArmSystem::haveVirtualization(tc));
+        assert(ArmSystem::haveEL(tc, EL2));
         tc->setMiscReg(MISCREG_SPSR_HYP, saved_cpsr);
         setSyndrome(tc, MISCREG_HSR);
         break;
@@ -616,12 +629,12 @@ ArmFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
         panic("unknown Mode\n");
     }
 
-    Addr newPc = getVector(tc);
+    Addr new_pc = getVector(tc);
     DPRINTF(Faults, "Invoking Fault:%s cpsr:%#x PC:%#x lr:%#x newVec: %#x "
-            "%s\n", name(), cpsr, curPc, tc->readIntReg(INTREG_LR),
-            newPc, arm_inst ? csprintf("inst: %#x", arm_inst->encoding()) :
+            "%s\n", name(), cpsr, cur_pc, tc->readIntReg(INTREG_LR),
+            new_pc, arm_inst ? csprintf("inst: %#x", arm_inst->encoding()) :
             std::string());
-    PCState pc(newPc);
+    PCState pc(new_pc);
     pc.thumb(cpsr.t);
     pc.nextThumb(pc.thumb());
     pc.jazelle(cpsr.j);
@@ -643,12 +656,12 @@ ArmFault::invoke64(ThreadContext *tc, const StaticInstPtr &inst)
         spsr_idx = MISCREG_SPSR_EL1;
         break;
       case EL2:
-        assert(ArmSystem::haveVirtualization(tc));
+        assert(ArmSystem::haveEL(tc, EL2));
         elr_idx = MISCREG_ELR_EL2;
         spsr_idx = MISCREG_SPSR_EL2;
         break;
       case EL3:
-        assert(ArmSystem::haveSecurity(tc));
+        assert(ArmSystem::haveEL(tc, EL3));
         elr_idx = MISCREG_ELR_EL3;
         spsr_idx = MISCREG_SPSR_EL3;
         break;
@@ -674,14 +687,15 @@ ArmFault::invoke64(ThreadContext *tc, const StaticInstPtr &inst)
         spsr.t = 0;
     } else {
         spsr.ge = tc->readCCReg(CCREG_GE);
-        ITSTATE it = tc->pcState().itstate();
+        ITSTATE it = tc->pcState().as<PCState>().itstate();
         spsr.it2 = it.top6;
         spsr.it1 = it.bottom2;
+        spsr.uao = 0;
     }
     tc->setMiscReg(spsr_idx, spsr);
 
     // Save preferred return address into ELR_ELx
-    Addr curr_pc = tc->pcState().pc();
+    Addr curr_pc = tc->pcState().instAddr();
     Addr ret_addr = curr_pc;
     if (from64)
         ret_addr += armPcElrOffset();
@@ -701,12 +715,13 @@ ArmFault::invoke64(ThreadContext *tc, const StaticInstPtr &inst)
     cpsr.il = 0;
     cpsr.ss = 0;
     cpsr.pan = span ? 1 : spsr.pan;
+    cpsr.uao = 0;
     tc->setMiscReg(MISCREG_CPSR, cpsr);
 
     // If we have a valid instruction then use it to annotate this fault with
     // extra information. This is used to generate the correct fault syndrome
     // information
-    GEM5_VAR_USED ArmStaticInst *arm_inst = instrAnnotate(inst);
+    [[maybe_unused]] ArmStaticInst *arm_inst = instrAnnotate(inst);
 
     // Set PC to start of exception handler
     Addr new_pc = purifyTaggedAddr(vec_address, tc, toEL, true);
@@ -758,9 +773,9 @@ Reset::getVector(ThreadContext *tc)
     Addr base;
 
     // Check for invalid modes
-    GEM5_VAR_USED CPSR cpsr = tc->readMiscRegNoEffect(MISCREG_CPSR);
-    assert(ArmSystem::haveSecurity(tc) || cpsr.mode != MODE_MON);
-    assert(ArmSystem::haveVirtualization(tc) || cpsr.mode != MODE_HYP);
+    [[maybe_unused]] CPSR cpsr = tc->readMiscRegNoEffect(MISCREG_CPSR);
+    assert(ArmSystem::haveEL(tc, EL3) || cpsr.mode != MODE_MON);
+    assert(ArmSystem::haveEL(tc, EL2) || cpsr.mode != MODE_HYP);
 
     // RVBAR is aliased (implemented as) MVBAR in gem5, since the two
     // are mutually exclusive; there is no need to check here for
@@ -783,15 +798,15 @@ Reset::invoke(ThreadContext *tc, const StaticInstPtr &inst)
                        getMPIDR(dynamic_cast<ArmSystem*>(tc->getSystemPtr()), tc));
 
         // Unless we have SMC code to get us there, boot in HYP!
-        if (ArmSystem::haveVirtualization(tc) &&
-            !ArmSystem::haveSecurity(tc)) {
+        if (ArmSystem::haveEL(tc, EL2) &&
+            !ArmSystem::haveEL(tc, EL3)) {
             CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
             cpsr.mode = MODE_HYP;
             tc->setMiscReg(MISCREG_CPSR, cpsr);
         }
     } else {
         // Advance the PC to the IMPLEMENTATION DEFINED reset value
-        PCState pc = ArmSystem::resetAddr(tc);
+        PCState pc(ArmSystem::resetAddr(tc));
         pc.aarch64(true);
         pc.nextAArch64(true);
         tc->pcState(pc);
@@ -866,15 +881,15 @@ SupervisorCall::invoke(ThreadContext *tc, const StaticInstPtr &inst)
         return;
     }
 
-    // As of now, there isn't a 32 bit thumb version of this instruction.
-    assert(!machInst.bigThumb);
-    tc->getSystemPtr()->workload->syscall(tc);
-
     // Advance the PC since that won't happen automatically.
-    PCState pc = tc->pcState();
+    PCState pc = tc->pcState().as<PCState>();
     assert(inst);
     inst->advancePC(pc);
     tc->pcState(pc);
+
+    // As of now, there isn't a 32 bit thumb version of this instruction.
+    assert(!machInst.bigThumb);
+    tc->getSystemPtr()->workload->syscall(tc);
 }
 
 bool
@@ -1072,7 +1087,8 @@ AbortFault<T>::invoke(ThreadContext *tc, const StaticInstPtr &inst)
             // See ARM ARM B3-1416
             bool override_LPAE = false;
             TTBCR ttbcr_s = tc->readMiscReg(MISCREG_TTBCR_S);
-            GEM5_VAR_USED TTBCR ttbcr_ns = tc->readMiscReg(MISCREG_TTBCR_NS);
+            [[maybe_unused]] TTBCR ttbcr_ns =
+                tc->readMiscReg(MISCREG_TTBCR_NS);
             if (ttbcr_s.eae) {
                 override_LPAE = true;
             } else {
@@ -1207,7 +1223,7 @@ template<class T>
 bool
 AbortFault<T>::abortDisable(ThreadContext *tc)
 {
-    if (ArmSystem::haveSecurity(tc)) {
+    if (ArmSystem::haveEL(tc, EL3)) {
         SCR scr = tc->readMiscRegNoEffect(MISCREG_SCR);
         return (!scr.ns || scr.aw);
     }
@@ -1464,7 +1480,7 @@ VirtualDataAbort::invoke(ThreadContext *tc, const StaticInstPtr &inst)
 bool
 Interrupt::routeToMonitor(ThreadContext *tc) const
 {
-    assert(ArmSystem::haveSecurity(tc));
+    assert(ArmSystem::haveEL(tc, EL3));
     SCR scr = 0;
     if (from64)
         scr = tc->readMiscRegNoEffect(MISCREG_SCR_EL3);
@@ -1484,7 +1500,7 @@ Interrupt::routeToHyp(ThreadContext *tc) const
 bool
 Interrupt::abortDisable(ThreadContext *tc)
 {
-    if (ArmSystem::haveSecurity(tc)) {
+    if (ArmSystem::haveEL(tc, EL3)) {
         SCR scr = tc->readMiscRegNoEffect(MISCREG_SCR);
         return (!scr.ns || scr.aw);
     }
@@ -1497,7 +1513,7 @@ VirtualInterrupt::VirtualInterrupt()
 bool
 FastInterrupt::routeToMonitor(ThreadContext *tc) const
 {
-    assert(ArmSystem::haveSecurity(tc));
+    assert(ArmSystem::haveEL(tc, EL3));
     SCR scr = 0;
     if (from64)
         scr = tc->readMiscRegNoEffect(MISCREG_SCR_EL3);
@@ -1517,7 +1533,7 @@ FastInterrupt::routeToHyp(ThreadContext *tc) const
 bool
 FastInterrupt::abortDisable(ThreadContext *tc)
 {
-    if (ArmSystem::haveSecurity(tc)) {
+    if (ArmSystem::haveEL(tc, EL3)) {
         SCR scr = tc->readMiscRegNoEffect(MISCREG_SCR);
         return (!scr.ns || scr.aw);
     }
@@ -1527,9 +1543,9 @@ FastInterrupt::abortDisable(ThreadContext *tc)
 bool
 FastInterrupt::fiqDisable(ThreadContext *tc)
 {
-    if (ArmSystem::haveVirtualization(tc)) {
+    if (ArmSystem::haveEL(tc, EL2)) {
         return true;
-    } else if (ArmSystem::haveSecurity(tc)) {
+    } else if (ArmSystem::haveEL(tc, EL3)) {
         SCR scr = tc->readMiscRegNoEffect(MISCREG_SCR);
         return (!scr.ns || scr.fw);
     }
@@ -1579,7 +1595,7 @@ SystemError::invoke(ThreadContext *tc, const StaticInstPtr &inst)
 bool
 SystemError::routeToMonitor(ThreadContext *tc) const
 {
-    assert(ArmSystem::haveSecurity(tc));
+    assert(ArmSystem::haveEL(tc, EL3));
     assert(from64);
     SCR scr = tc->readMiscRegNoEffect(MISCREG_SCR_EL3);
     return scr.ea || fromEL == EL3;
@@ -1651,11 +1667,11 @@ HardwareBreakpoint::invoke(ThreadContext *tc, const StaticInstPtr &inst)
         elr_idx = MISCREG_ELR_EL1;
         break;
       case EL2:
-        assert(ArmSystem::haveVirtualization(tc));
+        assert(ArmSystem::haveEL(tc, EL2));
         elr_idx = MISCREG_ELR_EL2;
         break;
       case EL3:
-        assert(ArmSystem::haveSecurity(tc));
+        assert(ArmSystem::haveEL(tc, EL3));
         elr_idx = MISCREG_ELR_EL3;
         break;
       default:

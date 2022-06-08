@@ -29,9 +29,11 @@
 #ifndef __ARCH_POWER_INSTS_STATICINST_HH__
 #define __ARCH_POWER_INSTS_STATICINST_HH__
 
+#include "arch/power/pcstate.hh"
 #include "arch/power/types.hh"
 #include "base/trace.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
 
 namespace gem5
 {
@@ -68,17 +70,26 @@ class PowerStaticInst : public StaticInst
             Addr pc, const loader::SymbolTable *symtab) const override;
 
     void
-    advancePC(PowerISA::PCState &pcState) const override
+    advancePC(PCStateBase &pc_state) const override
     {
-        pcState.advance();
+        pc_state.as<PCState>().advance();
     }
 
-    PCState
-    buildRetPC(const PCState &curPC, const PCState &callPC) const override
+    void
+    advancePC(ThreadContext *tc) const override
     {
-        PCState retPC = callPC;
-        retPC.advance();
-        return retPC;
+        PCState pc = tc->pcState().as<PCState>();
+        pc.advance();
+        tc->pcState(pc);
+    }
+
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
+    {
+        PCStateBase *ret_pc = call_pc.clone();
+        ret_pc->as<PCState>().advance();
+        return std::unique_ptr<PCStateBase>{ret_pc};
     }
 
     size_t
