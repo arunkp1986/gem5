@@ -266,8 +266,6 @@ class TimingSimpleCPU : public BaseSimpleCPU
         };
 
         DTickEvent tickEvent;
-        std::unordered_map<PacketPtr,PacketPtr> clear_pkt;
-
     };
 
     void updateCycleCounts();

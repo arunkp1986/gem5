@@ -641,7 +641,6 @@ TimingSimpleCPU::comparator_flush(){
         value = (dirty_lookup[dirty_address]).second;
         if (!value){
             it = dirty_lookup.erase(it);
-            dirty_packet[dirty_address]->deleteTData();
             delete dirty_packet[dirty_address];
             dirty_packet.erase(dirty_address);
             dirty_count.erase(dirty_address);
@@ -671,6 +670,7 @@ TimingSimpleCPU::comparator_selective_flush(){
     uint32_t value = 0;
     uint16_t evicted = 0;
     auto it = dirty_lookup.begin();
+
     while ( it != dirty_lookup.end()){
         dirty_address = (Addr)(it->first);
         /*
@@ -691,7 +691,6 @@ TimingSimpleCPU::comparator_selective_flush(){
             value = (dirty_lookup[dirty_address]).second;
             if (!value){
                 it = dirty_lookup.erase(it);
-                dirty_packet[dirty_address]->deleteTData();
                 delete dirty_packet[dirty_address];
                 dirty_packet.erase(dirty_address);
                 dirty_count.erase(dirty_address);
@@ -796,6 +795,7 @@ TimingSimpleCPU::comparator(){
         if (dirty_packet.find(dirty_address) == dirty_packet.end()){
             dirty_packet[dirty_address] = new Packet(tracker_pkt,0,1);
         }
+        delete tracker_pkt;
 
         /*create an entry in lookup table
          * if entry present,check same bit pos entry
@@ -825,6 +825,9 @@ TimingSimpleCPU::comparator(){
         /*issue the read request with the bitpos value
          * information*/
         if (proceed){
+            assert(dirty_packet.find(dirty_address) != dirty_packet.end());
+            tracker_pkt = dirty_packet[dirty_address];
+            tracker_req = tracker_pkt->req;
             tracker_req->setFlags(Request::PHYSICAL);
             tracker_req->setPaddr(dirty_address);
             tracker_pkt->setAddr(dirty_address);
@@ -1468,7 +1471,6 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
     tracker_pkt->setData(bitmap_value);
     tracker_pkt->setTcmd(MemCmd::WriteReq);
     tracker_pkt->setTracker(1);
-    tracker_pkt->setTflag();
     if (!sendTimingReq(tracker_pkt)) {
         std::cout<<"sending failed create_comparator_write\n"<<std::endl;
         cpu->_trackerstatus = DcacheTrackerRetry;
@@ -1493,19 +1495,13 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
         if (pkt->isRead()){
             PacketPtr tracker_write_pkt = new Packet(pkt,0,1);
             create_comparator_write(tracker_write_pkt,0);
-            pkt->setTflag();
-            //clear_pkt[tracker_write_pkt] = pkt;
-            //create_comparator_write(pkt,0);
         }
         if (pkt->isWrite()){
              cpu->dirty_tracking_done += 1;
-             //clear_pkt[pkt]->deleteTData();
-             //delete clear_pkt[pkt];
-             //clear_pkt.erase(pkt);
-             //pkt->deleteTData();
-             //delete pkt;
+             delete pkt;
              //std::cout<<"WResp Address: "<<pkt->getAddr()<<std::endl;
         }
+        //delete pkt;
         //std::cout<<"got tracker packet"<<std::endl;
         return true;
     }

@@ -1090,12 +1090,6 @@ class Packet : public Printable
         this->cmd = _cmd;
     }
 
-    void
-    setTflag()
-    {
-        flags.set(DYNAMIC_DATA);;
-    }
-
 
     void
     setSize(unsigned size)
@@ -1368,14 +1362,6 @@ class Packet : public Printable
 
         flags.clear(STATIC_DATA|DYNAMIC_DATA);
         data = NULL;
-    }
-
-    void
-    deleteTData()
-    {
-        delete [] data;
-        //flags.clear(STATIC_DATA|DYNAMIC_DATA);
-        //data = NULL;
     }
 
 
