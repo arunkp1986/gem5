@@ -87,7 +87,8 @@ TimingSimpleCPU::TimingSimpleCPU(const TimingSimpleCPUParams &p)
     : BaseSimpleCPU(p), fetchTranslation(this), icachePort(this),
       dcachePort(this), ifetch_pkt(NULL), dcache_pkt(NULL),
       num_dirty_packets(0),dirty_tracking_done(0),bitset_pending(0),
-      previousCycle(0),fetchEvent([this]{ fetch(); }, name())
+      previousCycle(0),prosperstats(this),
+      fetchEvent([this]{ fetch(); }, name())
 {
     _status = Idle;
 }
@@ -267,6 +268,21 @@ TimingSimpleCPU::suspendContext(ThreadID thread_num)
     }
 
     BaseCPU::suspendContext(thread_num);
+}
+
+TimingSimpleCPU::StatGroup::StatGroup(statistics::Group *parent)
+        :statistics::Group(parent),
+        ADD_STAT(bitmapStores, statistics::units::Count::get(),
+               "Number of bitmap store requests"),
+        ADD_STAT(lookupFull, statistics::units::Count::get(),
+               "Number of time lookup table is full"),
+        ADD_STAT(evictStores, statistics::units::Count::get(),
+                "Number of eviction store requests"),
+        ADD_STAT(redundantStores, statistics::units::Count::get(),
+                "Number of redundant store requests"),
+        ADD_STAT(watermarkStores, statistics::units::Count::get(),
+                "Number of high watermark store requests")
+{
 }
 
 bool
@@ -709,6 +725,7 @@ TimingSimpleCPU::comparator_selective_flush(){
                 dcache_tracker_pkt = NULL;
                 num_dirty_packets += 1;
                 evicted += 1;
+                prosperstats.evictStores++;
             }
             it = dirty_lookup.erase(it);
             dirty_packet.erase(dirty_address);
@@ -789,6 +806,7 @@ TimingSimpleCPU::comparator(){
         /*This is the eviction policy of dirty address lookup table.*/
         if ((dirty_lookup.find(dirty_address) == dirty_lookup.end()) &&\
                         (dirty_lookup.size() == (LOOKUP_SIZE-1))){
+            prosperstats.lookupFull++;
             comparator_selective_flush();
         }
         /*This is used as a template to create later requests*/
@@ -848,6 +866,7 @@ TimingSimpleCPU::comparator(){
                 _trackerstatus = DcacheWaitTrackerResponse;
                 dcache_tracker_pkt = NULL;
                 num_dirty_packets += 1;
+                prosperstats.watermarkStores++;
             }
         }
     }
@@ -1463,6 +1482,7 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
     uint32_t temp = 0;
     memcpy(&temp, bitmap_value, 4);
     if ((temp & bitmap_pos) == bitmap_pos){
+        cpu->prosperstats.redundantStores++;
         cpu->dirty_tracking_done += 1;
         return;
     }
@@ -1480,6 +1500,7 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
         DPRINTF(Stackp, "setting DcacheWaitResponse\n");
         cpu->_trackerstatus = DcacheWaitTrackerResponse;
         cpu->dcache_tracker_pkt = NULL;
+        cpu->prosperstats.bitmapStores++;
        }
       return;
 }

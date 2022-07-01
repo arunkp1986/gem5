@@ -45,6 +45,7 @@
 #include <list>
 
 #include "arch/generic/mmu.hh"
+#include "base/statistics.hh"
 #include "cpu/simple/base.hh"
 #include "cpu/simple/exec_context.hh"
 #include "cpu/translation.hh"
@@ -291,6 +292,22 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     /** Return a reference to the instruction port. */
     Port &getInstPort() override { return icachePort; }
+
+    struct StatGroup : public statistics::Group
+    {
+        StatGroup(statistics::Group *parent);
+        /** Count the number of bitmap stores. */
+        statistics::Scalar bitmapStores;
+        /** Count the number of lookup full events. */
+        statistics::Scalar lookupFull;
+        /** Count the number of evict stores. */
+        statistics::Scalar evictStores;
+        /** Count the number of redundant store. */
+        statistics::Scalar redundantStores;
+        /** Count the number of high watermatk store. */
+        statistics::Scalar watermarkStores;
+
+    }prosperstats;
 
   public:
 
