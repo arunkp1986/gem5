@@ -90,7 +90,7 @@ class MySystem(System):
             self.cpu = [AtomicSimpleCPU(cpu_id = i, switched_out = False)
                               for i in range(num_cpus)]
             self.createCPUThreads(self.cpu)
-            self.mem_mode = 'timing'
+            self.mem_mode = 'atomic'
         else:
             # Note KVM needs a VM and atomic_noncaching
             self.cpu = [X86KvmCPU(cpu_id = i)

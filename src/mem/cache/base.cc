@@ -1097,6 +1097,14 @@ BaseCache::satisfyRequest(PacketPtr pkt, CacheBlk *blk, bool, bool)
         // note that the line may be also be considered writable in
         // downstream caches along the path to memory, but always
         // Exclusive, and never Modified
+        if (!blk->isSet(CacheBlk::WritableBit)){
+            if (pkt->getTracker())
+                std::cout<<"tracker pkt"<<std::endl;
+            else
+                std::cout<<"not tracker pkt"<<std::endl;
+
+            std::cout<<"Address: "<<std::hex<<pkt->getAddr()<<std::endl;
+        }
         assert(blk->isSet(CacheBlk::WritableBit));
         // Write or WriteLine at the first cache with block in writable state
         if (blk->checkWrite(pkt)) {
