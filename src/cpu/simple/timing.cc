@@ -392,7 +392,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
             if ((tracking_address == (req->getVaddr()
                                             & ((1UL<<37)-1)))
                             && !r_flag){
-                std::cout<<"going to flush comparator"<<std::endl;
+                //std::cout<<"going to flush comparator"<<std::endl;
                 r_flag = 1;
                 tc->setMiscRegNoEffect(\
                                 gem5::X86ISA::MISCREG_DIRTYMAP_ADDR,\
@@ -668,7 +668,7 @@ TimingSimpleCPU::comparator_flush(){
         value = (dirty_lookup[dirty_address]).second;
         if (!value){
             it = dirty_lookup.erase(it);
-            delete dirty_packet[dirty_address];
+            //delete dirty_packet[dirty_address];
             dirty_packet.erase(dirty_address);
             dirty_count.erase(dirty_address);
             continue;
@@ -718,7 +718,7 @@ TimingSimpleCPU::comparator_selective_flush(){
             value = (dirty_lookup[dirty_address]).second;
             if (!value){
                 it = dirty_lookup.erase(it);
-                delete dirty_packet[dirty_address];
+                //delete dirty_packet[dirty_address];
                 dirty_packet.erase(dirty_address);
                 dirty_count.erase(dirty_address);
                 continue;

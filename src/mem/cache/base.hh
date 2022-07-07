@@ -1234,9 +1234,9 @@ class BaseCache : public ClockedObject
         if (wq_entry && pkt->getTracker()){
             std::cout<<"got tracker packet in allocateWriteBuffer"<<std::endl;
         }
-        else{
-           writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
-        }
+
+        writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
+
 
         if (writeBuffer.isFull()) {
             setBlocked((BlockedCause)MSHRQueue_WriteBuffer);
