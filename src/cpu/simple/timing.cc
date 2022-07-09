@@ -653,11 +653,12 @@ void
 TimingSimpleCPU::comparator_flush(){
     Addr dirty_address = 0;
     uint32_t value = 0;
+    PacketPtr tracker_pkt;
     auto it = dirty_lookup.begin();
     while ( it != dirty_lookup.end() ){
         dirty_address = (Addr)it->first;
         assert(dirty_packet.find(dirty_address) != dirty_packet.end());
-        PacketPtr tracker_pkt = dirty_packet[dirty_address];
+        tracker_pkt = dirty_packet[dirty_address];
         RequestPtr tracker_req = tracker_pkt->req;
         tracker_req->setFlags(Request::PHYSICAL);
         tracker_req->setPaddr(dirty_address);
@@ -674,6 +675,9 @@ TimingSimpleCPU::comparator_flush(){
             continue;
         }
         tracker_pkt->setDirtybitPos(value);
+        it = dirty_lookup.erase(it);
+        dirty_packet.erase(dirty_address);
+        dirty_count.erase(dirty_address);
         if (!dcachePort.sendTimingReq(tracker_pkt)) {
             std::cout<<"sending failed comparator flush"<<std::endl;
             _trackerstatus = DcacheTrackerRetry;
@@ -685,9 +689,6 @@ TimingSimpleCPU::comparator_flush(){
             dcache_tracker_pkt = NULL;
             num_dirty_packets += 1;
         }
-        it = dirty_lookup.erase(it);
-        dirty_packet.erase(dirty_address);
-        dirty_count.erase(dirty_address);
     }
 }
 
@@ -696,6 +697,7 @@ TimingSimpleCPU::comparator_selective_flush(){
     Addr dirty_address = 0;
     uint32_t value = 0;
     uint16_t evicted = 0;
+    PacketPtr tracker_pkt;
     auto it = dirty_lookup.begin();
 
     while ( it != dirty_lookup.end()){
@@ -707,7 +709,7 @@ TimingSimpleCPU::comparator_selective_flush(){
         */
         if ( dirty_count[dirty_address] <= LOW_WATERMARK){
             assert(dirty_packet.find(dirty_address) != dirty_packet.end());
-            PacketPtr tracker_pkt = dirty_packet[dirty_address];
+            tracker_pkt = dirty_packet[dirty_address];
             RequestPtr tracker_req = tracker_pkt->req;
             tracker_req->setFlags(Request::PHYSICAL);
             tracker_req->setPaddr(dirty_address);
@@ -724,6 +726,9 @@ TimingSimpleCPU::comparator_selective_flush(){
                 continue;
             }
             tracker_pkt->setDirtybitPos(value);
+            it = dirty_lookup.erase(it);
+            dirty_packet.erase(dirty_address);
+            dirty_count.erase(dirty_address);
             if (!dcachePort.sendTimingReq(tracker_pkt)) {
                 std::cout<<\
                         "sending failed comparator selective flush"<<\
@@ -738,9 +743,6 @@ TimingSimpleCPU::comparator_selective_flush(){
                 evicted += 1;
                 prosperstats.evictStores++;
             }
-            it = dirty_lookup.erase(it);
-            dirty_packet.erase(dirty_address);
-            dirty_count.erase(dirty_address);
         }
         else{
             it++;
@@ -752,7 +754,7 @@ TimingSimpleCPU::comparator_selective_flush(){
         //std::cout<<"fallback to single eviction to make space"<<std::endl;
         dirty_address = (Addr)((dirty_lookup.begin())->first);
         assert(dirty_packet.find(dirty_address) != dirty_packet.end());
-        PacketPtr tracker_pkt = dirty_packet[dirty_address];
+        tracker_pkt = dirty_packet[dirty_address];
         RequestPtr tracker_req = tracker_pkt->req;
         tracker_req->setFlags(Request::PHYSICAL);
         tracker_req->setPaddr(dirty_address);
@@ -763,13 +765,15 @@ TimingSimpleCPU::comparator_selective_flush(){
         value = (dirty_lookup[dirty_address]).second;
         assert(value);
         tracker_pkt->setDirtybitPos(value);
-        dirty_count[dirty_address] = 0;
-        (dirty_lookup[dirty_address]).second = 0;
+        dirty_lookup.erase(dirty_address);
+        dirty_packet.erase(dirty_address);
+        dirty_count.erase(dirty_address);
+        //dirty_count[dirty_address] = 0;
+        //(dirty_lookup[dirty_address]).second = 0;
         if (!dcachePort.sendTimingReq(tracker_pkt)) {
             std::cout<<\
                         "sending failed comparator selective flush"<<\
                         std::endl;
-
             _trackerstatus = DcacheTrackerRetry;
             dcache_tracker_pkt = tracker_pkt;
         }
@@ -778,9 +782,6 @@ TimingSimpleCPU::comparator_selective_flush(){
             dcache_tracker_pkt = NULL;
             num_dirty_packets += 1;
         }
-        //dirty_lookup.erase(dirty_address);
-        //dirty_packet.erase(dirty_address);
-        //dirty_count.erase(dirty_address);
     }
 }
 
@@ -799,6 +800,7 @@ TimingSimpleCPU::comparator(){
     uint64_t stack_byte_offset = 0;
     uint32_t dirty_bit_pos = 0;
     uint32_t dirty_bitmap_pos = 0;
+    PacketPtr tracker_pkts;
     stack_start = (Addr)tc->readMiscRegNoEffect(\
                   gem5::X86ISA::MISCREG_TRACK_START);
     tracking_address = tc->readMiscRegNoEffect(\
@@ -861,22 +863,23 @@ TimingSimpleCPU::comparator(){
          * information*/
         if (proceed){
             assert(dirty_packet.find(dirty_address) != dirty_packet.end());
-            tracker_pkt = dirty_packet[dirty_address];
-            tracker_req = tracker_pkt->req;
+            tracker_pkts = dirty_packet[dirty_address];
+            tracker_req = tracker_pkts->req;
             tracker_req->setFlags(Request::PHYSICAL);
             tracker_req->setPaddr(dirty_address);
-            tracker_pkt->setAddr(dirty_address);
-            tracker_pkt->setTcmd(MemCmd::ReadReq);
-            tracker_pkt->setTSize(4);
-            tracker_pkt->setTracker(1);
+            tracker_pkts->setAddr(dirty_address);
+            tracker_pkts->setTcmd(MemCmd::ReadReq);
+            tracker_pkts->setTSize(4);
+            tracker_pkts->setTracker(1);
             uint32_t value = (dirty_lookup[dirty_address]).second;
-            tracker_pkt->setDirtybitPos(value);
+            tracker_pkts->setDirtybitPos(value);
             dirty_count[dirty_address] = 0;
             (dirty_lookup[dirty_address]).second = 0;
-            if (!dcachePort.sendTimingReq(tracker_pkt)) {
+            dirty_packet.erase(dirty_address);
+            if (!dcachePort.sendTimingReq(tracker_pkts)) {
                  std::cout<<"sending failed comparator"<<std::endl;
                 _trackerstatus = DcacheTrackerRetry;
-                dcache_tracker_pkt = tracker_pkt;
+                dcache_tracker_pkt = tracker_pkts;
             }
             else {
                 DPRINTF(Stackp, "setting DcacheWaitResponse\n");
@@ -1536,6 +1539,7 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
         }
         if (pkt->isWrite()){
              cpu->dirty_tracking_done += 1;
+             //Addr dirty_address = pkt->getAddr();
              delete pkt;
              //std::cout<<"WResp Address: "<<pkt->getAddr()<<std::endl;
         }
