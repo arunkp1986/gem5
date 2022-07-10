@@ -723,6 +723,7 @@ TimingSimpleCPU::comparator_selective_flush(){
                 //delete dirty_packet[dirty_address];
                 dirty_packet.erase(dirty_address);
                 dirty_count.erase(dirty_address);
+                evicted += 1;
                 continue;
             }
             tracker_pkt->setDirtybitPos(value);
