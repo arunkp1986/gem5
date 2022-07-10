@@ -708,15 +708,6 @@ TimingSimpleCPU::comparator_selective_flush(){
          *set so evict entries with dirty bits <= LOW_WATERMARK.
         */
         if ( dirty_count[dirty_address] <= LOW_WATERMARK){
-            assert(dirty_packet.find(dirty_address) != dirty_packet.end());
-            tracker_pkt = dirty_packet[dirty_address];
-            RequestPtr tracker_req = tracker_pkt->req;
-            tracker_req->setFlags(Request::PHYSICAL);
-            tracker_req->setPaddr(dirty_address);
-            tracker_pkt->setAddr(dirty_address);
-            tracker_pkt->setTcmd(MemCmd::ReadReq);
-            tracker_pkt->setTSize(4);
-            tracker_pkt->setTracker(1);
             value = (dirty_lookup[dirty_address]).second;
             if (!value){
                 it = dirty_lookup.erase(it);
@@ -726,6 +717,15 @@ TimingSimpleCPU::comparator_selective_flush(){
                 evicted += 1;
                 continue;
             }
+            assert(dirty_packet.find(dirty_address) != dirty_packet.end());
+            tracker_pkt = dirty_packet[dirty_address];
+            RequestPtr tracker_req = tracker_pkt->req;
+            tracker_req->setFlags(Request::PHYSICAL);
+            tracker_req->setPaddr(dirty_address);
+            tracker_pkt->setAddr(dirty_address);
+            tracker_pkt->setTcmd(MemCmd::ReadReq);
+            tracker_pkt->setTSize(4);
+            tracker_pkt->setTracker(1);
             tracker_pkt->setDirtybitPos(value);
             it = dirty_lookup.erase(it);
             dirty_packet.erase(dirty_address);
