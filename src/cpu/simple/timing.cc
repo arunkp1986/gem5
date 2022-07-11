@@ -1537,6 +1537,7 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
         if (pkt->isRead()){
             PacketPtr tracker_write_pkt = new Packet(pkt,0,1);
             create_comparator_write(tracker_write_pkt,0);
+            delete pkt;
         }
         if (pkt->isWrite()){
              cpu->dirty_tracking_done += 1;
