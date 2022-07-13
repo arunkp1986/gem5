@@ -1080,8 +1080,10 @@ class Packet : public Printable
     {
         this->size = size;
         flags.set(VALID_SIZE);
+        if (this->data)
+            delete this->data;
         this->data = new uint8_t[getSize()];
-        flags.set(STATIC_DATA);
+        //flags.set(STATIC_DATA);
     }
 
     void
@@ -1289,6 +1291,28 @@ class Packet : public Printable
             std::memcpy(getPtr<uint8_t>(), p, getSize());
         }
     }
+    /**
+     * Copy data into the packet from the provided packet.
+     */
+    void
+    setTData(const PacketPtr pkt)
+    {
+        if (pkt->data){
+            std::memcpy(getPtr<uint8_t>(), pkt->data, getSize());
+        }
+        /*
+        // we should never be copying data onto itself, which means we
+        // must idenfity packets with static data, as they carry the
+        // same pointer from source to destination and back
+        assert(p != getPtr<uint8_t>() || flags.isSet(STATIC_DATA));
+
+        if (p != getPtr<uint8_t>()) {
+            // for packet with allocated dynamic data, we copy data from
+            // one to the other, e.g. a forwarded response to a response
+            std::memcpy(getPtr<uint8_t>(), p, getSize());
+        }*/
+    }
+
 
     void
     getData(uint8_t *p)
