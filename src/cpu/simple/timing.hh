@@ -62,7 +62,7 @@
  *
  * */
 #define LOOKUP_SIZE 16
-#define HIGH_WATERMARK 24
+#define HIGH_WATERMARK 16
 #define LOW_WATERMARK 8
 namespace gem5
 {
@@ -343,6 +343,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
             dirty_lookup; //Added by Arun KP
     std::unordered_map<Addr,PacketPtr> dirty_packet; //Added by Arun KP
     std::unordered_map<Addr,uint8_t> dirty_count; //Added by Arun KP
+    std::unordered_map<Addr,uint32_t> load_queue; //Added by Arun KP
     std::list<PacketPtr> read_list; //Added by Arun KP
     void comparator();
     void comparator_flush();

@@ -404,6 +404,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                 dirty_packet.erase(dirty_packet.begin(), dirty_packet.end());
                 dirty_count.erase(dirty_count.begin(), dirty_count.end());
                 dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
+                load_queue.erase(load_queue.begin(), load_queue.end());
                 handleReadPacket(pkt);
             }
              // Reads to bitmap area other than the initiator read
@@ -432,6 +433,8 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     handleReadPacket(pkt);
                 }
                 else{
+                    num_dirty_packets = 0;
+                    dirty_tracking_done = 0;
                     handleReadPacket(pkt);
                 }
             }
@@ -656,7 +659,11 @@ TimingSimpleCPU::comparator_flush(){
     PacketPtr tracker_pkt;
     auto it = dirty_lookup.begin();
     while ( it != dirty_lookup.end() ){
-        dirty_address = (Addr)it->first;
+        dirty_address = (Addr)(it->first);
+        if (load_queue.find(dirty_address) != load_queue.end()){
+            it++;
+            continue;
+        }
         value = (dirty_lookup[dirty_address]).second;
         if (!value){
             it = dirty_lookup.erase(it);
@@ -701,14 +708,17 @@ TimingSimpleCPU::comparator_selective_flush(){
     auto it = dirty_lookup.begin();
 
     while ( it != dirty_lookup.end()){
+        std::cout<<"selective flush"<<std::endl;
         dirty_address = (Addr)(it->first);
         /*
          *the logic for LOW_WATERMARK is that,
          prefer to keep entries with more dirty bits
          *set so evict entries with dirty bits <= LOW_WATERMARK.
         */
-        if ( dirty_count[dirty_address] <= LOW_WATERMARK){
+        if (static_cast<unsigned>(dirty_count[dirty_address])
+                        <= LOW_WATERMARK){
             value = (dirty_lookup[dirty_address]).second;
+            std::cout<<"value:"<<value<<std::endl;
             if (!value){
                 it = dirty_lookup.erase(it);
                 //delete dirty_packet[dirty_address];
@@ -718,6 +728,7 @@ TimingSimpleCPU::comparator_selective_flush(){
                 continue;
             }
             assert(dirty_packet.find(dirty_address) != dirty_packet.end());
+            assert(load_queue.find(dirty_address) == load_queue.end());
             tracker_pkt = dirty_packet[dirty_address];
             RequestPtr tracker_req = tracker_pkt->req;
             tracker_req->setFlags(Request::PHYSICAL);
@@ -753,6 +764,13 @@ TimingSimpleCPU::comparator_selective_flush(){
      * then evict first entries to make space*/
     if (evicted == 0){
         //std::cout<<"fallback to single eviction to make space"<<std::endl;
+        /*for (auto it = dirty_lookup.begin(); it != dirty_lookup.end(); it++){
+            dirty_address = (Addr)(it->first);
+            if (load_queue.find(dirty_address) == load_queue.end())
+                break;
+        }
+        assert(it != dirty_lookup.end());
+        dirty_address = (Addr)(it->first);*/
         dirty_address = (Addr)((dirty_lookup.begin())->first);
         assert(dirty_packet.find(dirty_address) != dirty_packet.end());
         tracker_pkt = dirty_packet[dirty_address];
@@ -769,8 +787,6 @@ TimingSimpleCPU::comparator_selective_flush(){
         dirty_lookup.erase(dirty_address);
         dirty_packet.erase(dirty_address);
         dirty_count.erase(dirty_address);
-        //dirty_count[dirty_address] = 0;
-        //(dirty_lookup[dirty_address]).second = 0;
         if (!dcachePort.sendTimingReq(tracker_pkt)) {
             std::cout<<\
                         "sending failed comparator selective flush"<<\
@@ -823,9 +839,14 @@ TimingSimpleCPU::comparator(){
         dirty_bit_pos = (stack_byte_offset >> tracking_log_gran);
         dirty_bitmap_pos = dirty_bit_pos>>5;
         dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
+        if (load_queue.find(dirty_address) != load_queue.end()){
+            load_queue[dirty_address] |= (1<<(dirty_bit_pos%32));
+            delete tracker_pkt;
+            return;
+        }
         /*This is the eviction policy of dirty address lookup table.*/
         if ((dirty_lookup.find(dirty_address) == dirty_lookup.end()) &&\
-                        (dirty_lookup.size() == (LOOKUP_SIZE-1))){
+                        (dirty_lookup.size() == LOOKUP_SIZE)){
             prosperstats.lookupFull++;
             comparator_selective_flush();
         }
@@ -857,7 +878,8 @@ TimingSimpleCPU::comparator(){
                          (1<<(dirty_bit_pos%32));
                 dirty_count[dirty_address] += 1;
             }
-            if (dirty_count[dirty_address] == HIGH_WATERMARK)
+            if (static_cast<unsigned>(dirty_count[dirty_address])
+                            == HIGH_WATERMARK)
                 proceed = 1;
         }
         /*issue the read request with the bitpos value
@@ -873,10 +895,12 @@ TimingSimpleCPU::comparator(){
             tracker_pkts->setTSize(4);
             tracker_pkts->setTracker(1);
             uint32_t value = (dirty_lookup[dirty_address]).second;
+            load_queue[dirty_address] = value;
             tracker_pkts->setDirtybitPos(value);
-            dirty_count[dirty_address] = 0;
-            (dirty_lookup[dirty_address]).second = 0;
+            dirty_count.erase(dirty_address);
+            dirty_lookup.erase(dirty_address);
             dirty_packet.erase(dirty_address);
+            //(dirty_lookup[dirty_address]).first = 1;
             if (!dcachePort.sendTimingReq(tracker_pkts)) {
                  std::cout<<"sending failed comparator"<<std::endl;
                 _trackerstatus = DcacheTrackerRetry;
@@ -1498,7 +1522,14 @@ void
 TimingSimpleCPU::DcachePort::create_comparator_write(
                 PacketPtr tracker_pkt, uint16_t isdone){
     uint8_t bitmap_value[4];
-    uint32_t bitmap_pos = tracker_pkt->getDirtybitPos();
+    Addr dirty_address = tracker_pkt->getAddr();
+    uint32_t bitmap_pos = 0;
+    if (cpu->load_queue.find(dirty_address) == cpu->load_queue.end()){
+        bitmap_pos = tracker_pkt->getDirtybitPos();
+    }
+    else{
+        bitmap_pos = cpu->load_queue[dirty_address];
+    }
     tracker_pkt->getData(bitmap_value);
     uint32_t temp = 0;
     memcpy(&temp, bitmap_value, 4);
@@ -1506,6 +1537,7 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
     if ((temp & bitmap_pos) == bitmap_pos){
         cpu->prosperstats.redundantStores++;
         cpu->dirty_tracking_done += 1;
+        delete tracker_pkt;
         return;
     }
     temp |= bitmap_pos;
@@ -1513,6 +1545,13 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
     tracker_pkt->setData(bitmap_value);
     tracker_pkt->setTcmd(MemCmd::WriteReq);
     tracker_pkt->setTracker(1);
+    if (static_cast<unsigned>(cpu->load_queue[dirty_address])
+                    > HIGH_WATERMARK){
+        std::cout<<"dirty count: "<<\
+                static_cast<unsigned>(cpu->load_queue[dirty_address])<<\
+                std::endl;
+    }
+    cpu->load_queue.erase(dirty_address);
     if (!sendTimingReq(tracker_pkt)) {
         std::cout<<"sending failed create_comparator_write\n"<<std::endl;
         cpu->_trackerstatus = DcacheTrackerRetry;
