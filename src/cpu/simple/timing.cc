@@ -328,6 +328,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
     static uint8_t r_flag = 0;
+    static uint8_t loop_counter = 0;
     static uint64_t min_address = 0xFFFFFFFFFF;
     ThreadContext *tc = thread->getTC();
     Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
@@ -351,6 +352,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         (req->getVaddr() <= stack_end)) && pkt->isWrite()){
         flag = 0;
         r_flag = 0;
+        loop_counter = 0;
         //num_dirty_packets = 0;
         //dirty_tracking_done = 0;
         if (min_address > req->getVaddr()){
@@ -412,6 +414,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
              // First handle the queued reads
             else {
                 if (num_dirty_packets != dirty_tracking_done){
+                    loop_counter += 1;
                     std::cout<<\
                          "num dirty packets not equal serviced packtes"<<\
                          std::endl;
@@ -419,9 +422,20 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                             num_dirty_packets<<std::endl;
                     std::cout<<"dirty tracking done: "<<\
                             dirty_tracking_done<<std::endl;
-                    read_list.push_back(pkt);
+                    std::cout<<"loop_counter"<<\
+                            static_cast<unsigned>(loop_counter)<<\
+                            std::endl;
+                    //to check from OS about status
+                    tc->setMiscRegNoEffect(\
+                                    gem5::X86ISA::MISCREG_TRACK_START,\
+                                    0);
+                    handleReadPacket(pkt);
+                    //read_list.push_back(pkt);
                 }
                 else if (!read_list.empty()){
+                    tc->setMiscRegNoEffect(\
+                                    gem5::X86ISA::MISCREG_TRACK_START,\
+                                    1);
                     std::cout<<"read list size: "<<\
                            read_list.size() <<std::endl;
                     for (auto it = read_list.begin();
@@ -432,6 +446,9 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     handleReadPacket(pkt);
                 }
                 else{
+                    tc->setMiscRegNoEffect(\
+                                    gem5::X86ISA::MISCREG_TRACK_START,\
+                                    1);
                     handleReadPacket(pkt);
                 }
             }
@@ -1658,6 +1675,7 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
     } else if (sendTimingReq(tmp)) {
         cpu->_trackerstatus = DcacheWaitTrackerResponse;
         // memory system takes ownership of packet
+        std::cout<<"recvReqRetry send success"<<std::endl;
         cpu->dcache_tracker_pkt = NULL;
     }
     }
