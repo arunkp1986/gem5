@@ -229,6 +229,10 @@ if __name__ == "__m5_main__":
         exit(1)
 
     output_dir = os.path.join(m5.options.outdir, "speclogs")
+    if not no_copy_logs:
+        # create the output folder
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
     # Get the DetailedCPU class from its name
     detailed_cpu = getDetailedCPUModel(cpu_name)
@@ -260,15 +264,16 @@ if __name__ == "__m5_main__":
     # booting linux
     success, exit_cause = boot_linux()
 
-    # reset stats
-    print("Reset stats")
-    m5.stats.reset()
 
     # switch from KVM to detailed CPU
     if not cpu_name == "kvm":
         print("Switching to detailed CPU")
         system.switchCpus(system.cpu, system.detailed_cpu)
         print("Switching done")
+
+    # reset stats
+    print("Reset stats")
+    m5.stats.reset()
 
     # running benchmark
     print("Benchmark: {}; Size: {}".format(benchmark_name, benchmark_size))

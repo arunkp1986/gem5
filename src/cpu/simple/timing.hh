@@ -306,6 +306,10 @@ class TimingSimpleCPU : public BaseSimpleCPU
         statistics::Scalar redundantStores;
         /** Count the number of high watermatk store. */
         statistics::Scalar watermarkStores;
+        /* count of demand stack stores*/
+        statistics::Scalar stackStores;
+        /* Count of flush stores*/
+        statistics::Scalar flushStores;
 
     }prosperstats;
 

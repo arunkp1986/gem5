@@ -62,7 +62,7 @@ class MySystem(System):
         self.workload.object_file = kernel
         # Options specified on the kernel command line
         boot_options = ['earlyprintk=ttyS0', 'console=ttyS0', 'lpj=7999923',
-                         'root=/dev/hda1']
+                         'root=/dev/hda1','nopti']
         self.workload.command_line = ' '.join(boot_options)
         # Create the CPUs for our system.
         self.createCPU(num_cpus, TimingCPUModel)

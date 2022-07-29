@@ -603,6 +603,7 @@ class BaseCPU : public ClockedObject
         BaseCPUStats(statistics::Group *parent);
         // Number of CPU cycles simulated
         statistics::Scalar numCycles;
+        statistics::Scalar numUsrCycles;
         statistics::Scalar numWorkItemsStarted;
         statistics::Scalar numWorkItemsCompleted;
     } baseStats;

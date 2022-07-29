@@ -90,6 +90,8 @@ class SimpleExecContext : public ExecContext
                                     thread->threadId()).c_str()),
               ADD_STAT(numInsts, statistics::units::Count::get(),
                        "Number of instructions committed"),
+              ADD_STAT(numUsrInsts, statistics::units::Count::get(),
+                       "Number of user space instructions committed"),
               ADD_STAT(numOps, statistics::units::Count::get(),
                        "Number of ops (including micro ops) committed"),
               ADD_STAT(numIntAluAccesses, statistics::units::Count::get(),
@@ -195,6 +197,7 @@ class SimpleExecContext : public ExecContext
 
         // Number of simulated instructions
         statistics::Scalar numInsts;
+        statistics::Scalar numUsrInsts;
         statistics::Scalar numOps;
 
         // Number of integer alu accesses

@@ -281,7 +281,13 @@ TimingSimpleCPU::StatGroup::StatGroup(statistics::Group *parent)
         ADD_STAT(redundantStores, statistics::units::Count::get(),
                 "Number of redundant store requests"),
         ADD_STAT(watermarkStores, statistics::units::Count::get(),
-                "Number of high watermark store requests")
+                "Number of high watermark store requests"),
+        ADD_STAT(stackStores, statistics::units::Count::get(),
+                "Number of stack demand store"),
+        ADD_STAT(flushStores, statistics::units::Count::get(),
+                "Number of flush store")
+
+
 {
 }
 
@@ -328,7 +334,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
     static uint8_t r_flag = 0;
-    static uint8_t loop_counter = 0;
+    //static uint8_t loop_counter = 0;
     static uint64_t min_address = 0xFFFFFFFFFF;
     ThreadContext *tc = thread->getTC();
     Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
@@ -352,7 +358,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         (req->getVaddr() <= stack_end)) && pkt->isWrite()){
         flag = 0;
         r_flag = 0;
-        loop_counter = 0;
+        //loop_counter = 0;
         //num_dirty_packets = 0;
         //dirty_tracking_done = 0;
         if (min_address > req->getVaddr()){
@@ -365,6 +371,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         PacketPtr tracker_pkt = new Packet(pkt,0,1);
         tracker_pkt->req = tracker_req;
         //std::cout<<"address: "<<std::hex<<req->getVaddr()<<std::endl;
+        prosperstats.stackStores++;
         comparator_list.push_front(tracker_pkt);
     }
 
@@ -414,7 +421,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
              // First handle the queued reads
             else {
                 if (num_dirty_packets != dirty_tracking_done){
-                    loop_counter += 1;
+                    //loop_counter += 1;
                     std::cout<<\
                          "num dirty packets not equal serviced packtes"<<\
                          std::endl;
@@ -422,20 +429,20 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                             num_dirty_packets<<std::endl;
                     std::cout<<"dirty tracking done: "<<\
                             dirty_tracking_done<<std::endl;
-                    std::cout<<"loop_counter"<<\
+                    /*std::cout<<"loop_counter"<<\
                             static_cast<unsigned>(loop_counter)<<\
                             std::endl;
                     //to check from OS about status
-                    tc->setMiscRegNoEffect(\
+                    //tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_START,\
                                     0);
-                    handleReadPacket(pkt);
-                    //read_list.push_back(pkt);
+                    //handleReadPacket(pkt);*/
+                    read_list.push_back(pkt);
                 }
                 else if (!read_list.empty()){
-                    tc->setMiscRegNoEffect(\
+                    /*/tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_START,\
-                                    1);
+                                    1);*/
                     std::cout<<"read list size: "<<\
                            read_list.size() <<std::endl;
                     for (auto it = read_list.begin();
@@ -446,9 +453,9 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     handleReadPacket(pkt);
                 }
                 else{
-                    tc->setMiscRegNoEffect(\
+                    /*/tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_START,\
-                                    1);
+                                    1);*/
                     handleReadPacket(pkt);
                 }
             }
@@ -705,6 +712,7 @@ TimingSimpleCPU::comparator_flush(){
             _trackerstatus = DcacheWaitTrackerResponse;
             dcache_tracker_pkt = NULL;
             num_dirty_packets += 1;
+            prosperstats.flushStores++;
         }
     }
 }
@@ -797,6 +805,7 @@ TimingSimpleCPU::comparator_selective_flush(){
             _trackerstatus = DcacheWaitTrackerResponse;
             dcache_tracker_pkt = NULL;
             num_dirty_packets += 1;
+            prosperstats.evictStores++;
         }
     }
 }
@@ -1471,9 +1480,17 @@ void
 TimingSimpleCPU::updateCycleCounts()
 {
     const Cycles delta(curCycle() - previousCycle);
+    SimpleExecContext& t_info = *threadInfo[curThread];
+    SimpleThread* thread = t_info.thread;
+    ThreadContext *tc = thread->getTC();
+    uint8_t usermode = tc->readMiscRegNoEffect(\
+                    gem5::X86ISA::MISCREG_TRACK_USER);
+    if (usermode){
+        //captures cycles spend in usermode
+        baseStats.numUsrCycles += delta;
+    }
 
     baseStats.numCycles += delta;
-
     previousCycle = curCycle();
 }
 

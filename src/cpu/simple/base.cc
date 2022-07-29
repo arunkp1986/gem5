@@ -154,9 +154,16 @@ void
 BaseSimpleCPU::countInst()
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
-
+    SimpleThread* thread = t_info.thread;
+    ThreadContext *tc = thread->getTC();
+    uint8_t usermode = tc->readMiscRegNoEffect(\
+                    gem5::X86ISA::MISCREG_TRACK_USER);
     if (!curStaticInst->isMicroop() || curStaticInst->isLastMicroop()) {
         t_info.numInst++;
+        if (usermode){
+            //captures number of instructions in usermode
+            t_info.execContextStats.numUsrInsts++;
+        }
         t_info.execContextStats.numInsts++;
     }
     t_info.numOp++;
