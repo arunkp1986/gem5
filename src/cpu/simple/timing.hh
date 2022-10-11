@@ -42,6 +42,7 @@
 #define __CPU_SIMPLE_TIMING_HH__
 
 #include "arch/generic/mmu.hh"
+#include "base/statistics.hh"
 #include "cpu/simple/base.hh"
 #include "cpu/simple/exec_context.hh"
 #include "cpu/translation.hh"
@@ -270,6 +271,14 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     /** Return a reference to the instruction port. */
     Port &getInstPort() override { return icachePort; }
+
+    struct StatGroup : public statistics::Group
+    {
+        StatGroup(statistics::Group *parent);
+        /** Count the number of bitmap stores. */
+        statistics::Scalar stores;
+
+    }mystats;
 
   public:
 

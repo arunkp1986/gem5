@@ -222,7 +222,6 @@ class BaseCPU : public ClockedObject
     inline void workItemEnd() { baseStats.numWorkItemsCompleted++; }
     // @todo remove me after debugging with legion done
     Tick instCount() { return instCnt; }
-
   protected:
     std::vector<BaseInterrupts*> interrupts;
 
@@ -561,11 +560,11 @@ class BaseCPU : public ClockedObject
     Tick functionEntryTick;
     void enableFunctionTrace();
     void traceFunctionsInternal(Addr pc);
-
   private:
-    static std::vector<BaseCPU *> cpuList;   //!< Static global cpu list
+
 
   public:
+    static std::vector<BaseCPU *> cpuList;   //!< Static global cpu list
     void
     traceFunctions(Addr pc)
     {

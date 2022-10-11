@@ -43,6 +43,7 @@
 #include <ostream>
 #include <stdexcept>
 
+#define MAX_REG 2
 namespace gem5
 {
 

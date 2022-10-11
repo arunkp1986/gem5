@@ -39,6 +39,7 @@
 #include "base/flags.hh"
 #include "base/stats/types.hh"
 #include "base/stats/units.hh"
+//#include "cpu/base.hh"
 
 namespace gem5
 {
@@ -176,8 +177,10 @@ class Info
 class ScalarInfo : public Info
 {
   public:
+    uint8_t is_reg_enable = 0;
     virtual Counter value() const = 0;
     virtual Result result() const = 0;
+    virtual Result result(int index) const = 0;
     virtual Result total() const = 0;
 };
 

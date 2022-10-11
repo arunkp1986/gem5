@@ -49,11 +49,14 @@
 #include "base/output.hh"
 #include "base/stats/output.hh"
 #include "base/stats/types.hh"
+#include "cpu/base.hh"
+#include "cpu/thread_context.hh"
 
 namespace gem5
 {
 
 GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+
 namespace statistics
 {
 

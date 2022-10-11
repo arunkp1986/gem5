@@ -56,6 +56,11 @@ namespace gem5
 {
 
 void
+ThreadContext::test_print()
+{
+    std::cout<<"test print: "<<__FILE__<<std::endl;
+}
+void
 ThreadContext::compare(ThreadContext *one, ThreadContext *two)
 {
     const auto &regClasses = one->getIsaPtr()->regClasses();

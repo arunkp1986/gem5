@@ -102,6 +102,7 @@ class ThreadContext : public PCEventScope
 
     void setUseForClone(bool new_val) { useForClone = new_val; }
 
+
     enum Status
     {
         /// Running.  Instructions should be executed only when
@@ -259,6 +260,8 @@ class ThreadContext : public PCEventScope
 
     /** function to compare two thread contexts (for debugging) */
     static void compare(ThreadContext *one, ThreadContext *two);
+
+    void test_print();
 
     /** @{ */
     /**

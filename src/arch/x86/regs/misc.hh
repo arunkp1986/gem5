@@ -397,8 +397,8 @@ namespace X86ISA
         //XXX Add "Model-Specific Registers"
 
         MISCREG_APIC_BASE,
-        MISCREG_TRACK_START,
-        MISCREG_TRACK_END,
+        MISCREG_CURR_REG,
+        MISCREG_MAX_REG,
         MISCREG_DIRTYMAP_ADDR,
         MISCREG_LOG_TRACK_GRAN,
 

@@ -86,6 +86,11 @@
 #include "base/stats/units.hh"
 #include "base/str.hh"
 #include "base/types.hh"
+//#include "cpu/base.hh"
+#include "cpu/thread_context.hh"
+
+#define MAX_REG 2
+#define TRACK_REG 1
 
 namespace gem5
 {
@@ -123,6 +128,7 @@ class ScalarInfoProxy : public InfoProxy<Stat, ScalarInfo>
 
     Counter value() const { return this->s.value(); }
     Result result() const { return this->s.result(); }
+    Result result(int index) const { return this->s.result(index); }
     Result total() const { return this->s.total(); }
 };
 
@@ -522,10 +528,11 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
   public:
     typedef Stor Storage;
     typedef typename Stor::Params Params;
-
+    mutable int msr = 0;
+    ThreadContext * tc = nullptr;
   protected:
     /** The storage of this stat. */
-    GEM5_ALIGNED(8) char storage[sizeof(Storage)];
+    GEM5_ALIGNED(8) char storage[MAX_REG][sizeof(Storage)];
 
   protected:
     /**
@@ -534,9 +541,16 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
      * @return The storage object at the given index.
      */
     Storage *
-    data()
-    {
-        return reinterpret_cast<Storage *>(storage);
+    data(){
+        if (TRACK_REG == 1 && tc != nullptr){
+            msr = (int)tc->readMiscRegNoEffect(gem5::X86ISA::MISCREG_CURR_REG);
+            //std::cout<<"msr value: "<<msr<<std::endl;
+            assert(msr<MAX_REG);
+            return reinterpret_cast<Storage *>(storage[msr]);
+        }
+        else{
+            return reinterpret_cast<Storage *>(storage[0]);
+        }
     }
 
     /**
@@ -548,13 +562,54 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
     const Storage *
     data() const
     {
-        return reinterpret_cast<const Storage *>(storage);
+        if (TRACK_REG == 1 && tc != nullptr){
+            msr = (int)tc->readMiscRegNoEffect(gem5::X86ISA::MISCREG_CURR_REG);
+            //std::cout<<"msr value: "<<msr<<std::endl;
+            assert(msr<MAX_REG);
+            return reinterpret_cast<const Storage *>(storage[msr]);
+        }
+        else{
+            return reinterpret_cast<const Storage *>(storage[0]);
+        }
+    }
+
+    const Storage *
+    data(int index) const
+    {
+        if (TRACK_REG == 1 && tc != nullptr){
+            //std::cout<<"index value: "<<index<<std::endl;
+            assert(index<MAX_REG);
+            return reinterpret_cast<const Storage *>(storage[index]);
+        }
+        else{
+            return reinterpret_cast<const Storage *>(storage[0]);
+        }
+    }
+
+    Storage *
+    data(int index)
+    {
+        if (TRACK_REG == 1 && tc != nullptr){
+            //std::cout<<"index value: "<<index<<std::endl;
+            assert(index<MAX_REG);
+            return reinterpret_cast<Storage *>(storage[index]);
+        }
+        else{
+            return reinterpret_cast<Storage *>(storage[0]);
+        }
     }
 
     void
     doInit()
     {
-        new (storage) Storage(this->info()->getStorageParams());
+        if (TRACK_REG == 1){
+            for (int i=0; i<MAX_REG; i++){
+                new (storage[i]) Storage(this->info()->getStorageParams());
+            }
+        }
+        else{
+            new (storage[0]) Storage(this->info()->getStorageParams());
+        }
         this->setInit();
     }
 
@@ -623,6 +678,8 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
 
     Result result() const { return data()->result(); }
 
+    Result result(int index) const { return data(index)->result(); }
+
     Result total() const { return result(); }
 
     bool zero() const { return result() == 0.0; }
@@ -654,6 +711,7 @@ class ValueProxy : public ProxyInfo
     ValueProxy(T &val) : scalar(&val) {}
     Counter value() const { return *scalar; }
     Result result() const { return *scalar; }
+    Result result(int index) const { assert(1); return *scalar; }
     Result total() const { return *scalar; }
 };
 
@@ -667,6 +725,7 @@ class FunctorProxy : public ProxyInfo
     FunctorProxy(T &func) : functor(&func) {}
     Counter value() const { return (*functor)(); }
     Result result() const { return (*functor)(); }
+    Result result(int index) const { assert(1); return (*functor)(); }
     Result total() const { return (*functor)(); }
 };
 
@@ -688,6 +747,7 @@ class FunctorProxy<T,
     FunctorProxy(const T &func) : functor(func) {}
     Counter value() const { return functor(); }
     Result result() const { return functor(); }
+    Result result(int index) const { assert(1); return functor(); }
     Result total() const { return functor(); }
 };
 
@@ -707,6 +767,7 @@ class MethodProxy : public ProxyInfo
     MethodProxy(T *obj, MethodPointer meth) : object(obj), method(meth) {}
     Counter value() const { return (object->*method)(); }
     Result result() const { return (object->*method)(); }
+    Result result(int index) const { assert(1); return (object->*method)(); }
     Result total() const { return (object->*method)(); }
 };
 
@@ -772,6 +833,7 @@ class ValueBase : public DataWrap<Derived, ScalarInfoProxy>
 
     Counter value() { return proxy->value(); }
     Result result() const { return proxy->result(); }
+    Result result(int index) const { assert(1); return proxy->result(); }
     Result total() const { return proxy->total(); };
     size_type size() const { return proxy->size(); }
 
@@ -1949,6 +2011,14 @@ class Scalar : public ScalarBase<Scalar, StatStor>
         : ScalarBase<Scalar, StatStor>(parent, name, unit, desc)
     {
     }
+    Scalar(Group *parent, const char *name,const units::Base *unit,
+                    ThreadContext *tcp = nullptr,const char *desc = nullptr)
+        : ScalarBase<Scalar, StatStor>(parent, name, unit, desc)
+    {
+            tc=tcp;
+            this->info()->is_reg_enable = 1;
+    }
+
 };
 
 /**

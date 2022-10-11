@@ -77,7 +77,7 @@ TimingSimpleCPU::TimingCPUPort::TickEvent::schedule(PacketPtr _pkt, Tick t)
 TimingSimpleCPU::TimingSimpleCPU(const TimingSimpleCPUParams &p)
     : BaseSimpleCPU(p), fetchTranslation(this), icachePort(this),
       dcachePort(this), ifetch_pkt(NULL), dcache_pkt(NULL), previousCycle(0),
-      fetchEvent([this]{ fetch(); }, name())
+      mystats(this),fetchEvent([this]{ fetch(); }, name())
 {
     _status = Idle;
 }
@@ -259,6 +259,14 @@ TimingSimpleCPU::suspendContext(ThreadID thread_num)
     BaseCPU::suspendContext(thread_num);
 }
 
+TimingSimpleCPU::StatGroup::StatGroup(statistics::Group *parent)
+        :statistics::Group(parent),
+        ADD_STAT(stores,
+                        statistics::units::Count::get(),
+                        "Number of store requests")
+{
+}
+
 bool
 TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
 {
@@ -335,6 +343,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         if (do_access) {
             dcache_pkt = pkt;
             handleWritePacket();
+            mystats.stores++;
             threadSnoop(pkt, curThread);
         } else {
             _status = DcacheWaitResponse;

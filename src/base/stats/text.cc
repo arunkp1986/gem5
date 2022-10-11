@@ -56,6 +56,7 @@
 #include "base/logging.hh"
 #include "base/stats/info.hh"
 #include "base/str.hh"
+//#include "base/statistics.hh"
 
 namespace gem5
 {
@@ -297,6 +298,7 @@ ScalarPrint::operator()(std::ostream &stream, bool oneLine) const
         ccprintf(stream, "%-*s ", nameSpaces, name);
     }
     ccprintf(stream, "%*s", valueSpaces, ValueToString(value, precision));
+    //std::cout<<"value: "<<value<<std::endl;
     if (spaces || pdfstr.rdbuf()->in_avail())
         ccprintf(stream, " %*s", pdfstrSpaces, pdfstr.str());
     if (spaces || cdfstr.rdbuf()->in_avail())
@@ -590,14 +592,34 @@ Text::visit(const ScalarInfo &info)
     if (noOutput(info))
         return;
 
-    ScalarPrint print(spaces);
-    print.setup(statName(info.name), info.flags, info.precision, descriptions,
-        info.desc, enableUnits, info.unit->getUnitString(), spaces);
-    print.value = info.result();
-    print.pdf = Nan;
-    print.cdf = Nan;
-
-    print(*stream);
+    //loop here MAX_REG
+    //set MSR register from here so that,
+    //the result info returns corresponding value for msr
+    if (info.is_reg_enable){
+        for (int msr=0; msr<MAX_REG; msr++){
+            std::string region = "_region_"+std::to_string(msr);
+            ScalarPrint print(spaces);
+            print.setup(statName(info.name+region), info.flags,
+                            info.precision, descriptions,
+                            info.desc, enableUnits,
+                            info.unit->getUnitString(), spaces);
+            print.value = info.result(msr);
+            print.pdf = Nan;
+            print.cdf = Nan;
+            print(*stream);
+        }
+    }
+    else{
+        ScalarPrint print(spaces);
+        print.setup(statName(info.name), info.flags,
+                        info.precision, descriptions,
+                        info.desc, enableUnits,
+                        info.unit->getUnitString(), spaces);
+        print.value = info.result();
+        print.pdf = Nan;
+        print.cdf = Nan;
+        print(*stream);
+    }
 }
 
 void

@@ -284,6 +284,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     assert(state != Ready && state != Waiting);
     Fault fault = NoFault;
     write = NULL;
+    std::cout<<"I am here"<<std::endl;
     PageTableEntry pte;
     if (dataSize == 8)
         pte = read->getLE<uint64_t>();

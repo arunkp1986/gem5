@@ -52,6 +52,8 @@
 #include "cpu/translation.hh"
 #include "mem/request.hh"
 
+//#define TRACK_REG 1
+
 namespace gem5
 {
 
@@ -89,8 +91,9 @@ class SimpleExecContext : public ExecContext
                            csprintf("exec_context.thread_%i",
                                     thread->threadId()).c_str()),
               ADD_STAT(numInsts, statistics::units::Count::get(),
+                              thread->getTC(),
                        "Number of instructions committed"),
-              ADD_STAT(numOps, statistics::units::Count::get(),
+              ADD_STAT(numOps, statistics::units::Count::get(),thread->getTC(),
                        "Number of ops (including micro ops) committed"),
               ADD_STAT(numIntAluAccesses, statistics::units::Count::get(),
                        "Number of integer alu accesses"),
