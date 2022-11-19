@@ -402,6 +402,7 @@ namespace X86ISA
         MISCREG_DIRTYMAP_ADDR,
         MISCREG_LOG_TRACK_GRAN,
         MISCREG_TRACK_USER,
+        MISCREG_TRACK_SYNC,
 
 
         // "Fake" MSRs for internally implemented devices
