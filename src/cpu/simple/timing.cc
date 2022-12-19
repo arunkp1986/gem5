@@ -336,12 +336,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     pkt->dataDynamic<uint8_t>(data);
     static uint8_t r_flag = 0;
     //static uint8_t loop_counter = 0;
-    static uint64_t min_address = 0xFFFFFFFFFF;
     ThreadContext *tc = thread->getTC();
-    Addr stack_start = (Addr)tc->readMiscRegNoEffect(\
-                    gem5::X86ISA::MISCREG_TRACK_START);
-    Addr stack_end = (Addr)tc->readMiscRegNoEffect(\
-                    gem5::X86ISA::MISCREG_TRACK_END);
     uint16_t tracking_log_gran = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
     Addr tracking_address = tc->readMiscRegNoEffect(\
@@ -356,17 +351,14 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     }*/
     /*here we are checking the tracking is still valid
      * and vaddr in req is of interest*/
-    if ((tracking_log_gran > 1) &&\
-                ((stack_start <= req->getVaddr()) &&\
-        (req->getVaddr() <= stack_end)) && pkt->isWrite()){
+    if ((tracking_log_gran >= 1) &&\
+                    ((0x1800000000 <= req->getVaddr()) && \
+        (req->getVaddr() <= 0x8000000000)) && pkt->isWrite()){
         flag = 0;
         r_flag = 0;
         //loop_counter = 0;
         num_dirty_packets = 0;
         dirty_tracking_done = 0;
-        if (min_address > req->getVaddr()){
-            min_address = req->getVaddr();
-        }
         //std::cout<<"Dirty Tracking On"<<std::endl;
         DPRINTF(Stackp, "sendData req vaddr:%x\n", req->getVaddr());
         RequestPtr tracker_req(new Request(*pkt->req));
@@ -374,7 +366,6 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         PacketPtr tracker_pkt = new Packet(pkt,0,1);
         tracker_pkt->req = tracker_req;
         //std::cout<<"address: "<<std::hex<<req->getVaddr()<<std::endl;
-        prosperstats.stackStores++;
         comparator_list.push_front(tracker_pkt);
     }
 
@@ -395,46 +386,19 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         completeDataAccess(pkt);
     } else if (read) {
         /*Read to bitmap area in byte granularity tracking*/
-        if ((tracking_log_gran == 1) &&\
+        if ((tracking_log_gran == 0) &&\
                         tracking_address &&\
                         (tracking_address <=
                          (req->getVaddr() & ((1UL<<37)-1)))){
-            //This corresponds to comparator flush initiator read.
-             //process any pending requests in queue*
             if ((tracking_address == (req->getVaddr()
                                             & ((1UL<<37)-1)))
                             && !r_flag){
                 //std::cout<<"going to flush comparator"<<std::endl;
                 r_flag = 1;
-                tc->setMiscRegNoEffect(\
-                                gem5::X86ISA::MISCREG_DIRTYMAP_ADDR,\
-                                min_address);
-                min_address = 0xFFFFFFFFFF;
-                comparator_flush();
-                comparator_list.erase(comparator_list.begin(),
-                                comparator_list.end());
-                dirty_packet.erase(dirty_packet.begin(), dirty_packet.end());
-                dirty_count.erase(dirty_count.begin(), dirty_count.end());
-                dirty_lookup.erase(dirty_lookup.begin(), dirty_lookup.end());
                 handleReadPacket(pkt);
             }
-             // Reads to bitmap area other than the initiator read
-             // Delay handling bitmap reads till the
-             // bitmap set write requests are processed
-             // First handle the queued reads
             else {
                 if (num_dirty_packets != dirty_tracking_done){
-                    //loop_counter += 1;
-                    /*std::cout<<\
-                         "num dirty packets not equal serviced packtes"<<\
-                         std::endl;
-                    std::cout<<"num dirty packetrs: "<<\
-                            num_dirty_packets<<std::endl;
-                    std::cout<<"dirty tracking done: "<<\
-                            dirty_tracking_done<<std::endl;*/
-                    /*std::cout<<"loop_counter"<<\
-                            static_cast<unsigned>(loop_counter)<<\
-                            std::endl;*/
                     //to check from OS about status
                     tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_SYNC,\
@@ -446,12 +410,11 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_SYNC,\
                                     1);
-                   /* std::cout<<"read list size: "
-                    * <<read_list.size() <<std::endl;*/
-                    for (auto it = read_list.begin();
+                   std::cout<<"read list size: "<<read_list.size() <<std::endl;
+                   /* for (auto it = read_list.begin();
                                     it != read_list.end(); it++){
                         //handleReadPacket(*it);
-                    }
+                    }*/
                     read_list.erase(read_list.begin(),read_list.end());
                     handleReadPacket(pkt);
                 }
@@ -675,7 +638,7 @@ TimingSimpleCPU::handleWritePacket()
     return dcache_pkt == NULL;
 }
 /*Added by KP Arun.*/
-
+/*
 void
 TimingSimpleCPU::comparator_flush(){
     Addr dirty_address = 0;
@@ -730,11 +693,11 @@ TimingSimpleCPU::comparator_selective_flush(){
 
     while ( it != dirty_lookup.end()){
         dirty_address = (Addr)(it->first);
-        /*
+        *
          *the logic for LOW_WATERMARK is that,
          prefer to keep entries with more dirty bits
          *set so evict entries with dirty bits <= LOW_WATERMARK.
-        */
+        *
         if ( dirty_count[dirty_address] <= LOW_WATERMARK){
             value = (dirty_lookup[dirty_address]).second;
             if (!value){
@@ -777,8 +740,8 @@ TimingSimpleCPU::comparator_selective_flush(){
             it++;
         }
     }
-    /*If there are entries satisfying <= LOW_WATERMARK condition
-     * then evict first entries to make space*/
+    *If there are entries satisfying <= LOW_WATERMARK condition
+     * then evict first entries to make space*
     if (evicted == 0){
         //std::cout<<"fallback to single eviction to make space"<<std::endl;
         dirty_address = (Addr)((dirty_lookup.begin())->first);
@@ -812,113 +775,58 @@ TimingSimpleCPU::comparator_selective_flush(){
         }
     }
 }
-
+*/
 //limit the number of entries to lookup to 16, and water mark to 8,16,32
 void
 TimingSimpleCPU::comparator(){
+    PacketPtr tracker_pkt = NULL;
     SimpleExecContext &t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
     ThreadContext *tc = thread->getTC();
     Addr tracking_address = 0;
     Addr dirty_address = 0;
     Addr virtual_address = 0;
-    Addr stack_start = 0;
     uint16_t tracking_log_gran = 0;
-    uint8_t proceed = 0;
-    uint64_t stack_byte_offset = 0;
-    uint32_t dirty_bit_pos = 0;
-    uint32_t dirty_bitmap_pos = 0;
-    PacketPtr tracker_pkts;
-    stack_start = (Addr)tc->readMiscRegNoEffect(\
-                  gem5::X86ISA::MISCREG_TRACK_START);
+    uint32_t data_size = 0;
+    static uint32_t log_count = 0;
+    struct log_entry log;
     tracking_address = tc->readMiscRegNoEffect(\
                   gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
     tracking_log_gran = tc->readMiscRegNoEffect(\
                   gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
-    /* here tracking_log_gran == 1 means end dirty tracking
-     *  has reached
-     * and tracking_log_gran > 1 means hardware perform
-     * dirty stores to dcache
-     * */
+
     //std::cout<<"comparator tracking gran: "<<tracking_log_gran<<std::endl;
-    if (tracking_address && tracking_log_gran > 1){
-        PacketPtr tracker_pkt = comparator_list.back();
+    if (tracking_address && tracking_log_gran >= 1){
+        tracker_pkt = comparator_list.back();
+        assert(tracker_pkt);
         RequestPtr tracker_req = tracker_pkt->req;
         comparator_list.pop_back();
         virtual_address = tracker_req->getVaddr();
-        stack_byte_offset = virtual_address - stack_start;
-        dirty_bit_pos = (stack_byte_offset >> tracking_log_gran);
-        dirty_bitmap_pos = dirty_bit_pos>>5;
-        dirty_address = (Addr)(tracking_address+(4*dirty_bitmap_pos));
-        /*This is the eviction policy of dirty address lookup table.*/
-        if ((dirty_lookup.find(dirty_address) == dirty_lookup.end()) &&\
-                        (dirty_lookup.size() == LOOKUP_SIZE)){
-            prosperstats.lookupFull++;
-            comparator_selective_flush();
-        }
-        /*This is used as a template to create later requests*/
-        if (dirty_packet.find(dirty_address) == dirty_packet.end()){
-            dirty_packet[dirty_address] = new Packet(tracker_pkt,0,1);
-        }
-        delete tracker_pkt;
-
-        /*create an entry in lookup table
-         * if entry present,check same bit pos entry
-         * is set, if not set bitpos
-         *if not entry, add the entry at free pos
-         *and if entry bits set reach HIGH WATERMARK,
-         * issue read with bitpos as value for later store.
-         * */
-        if (dirty_lookup.find(dirty_address) == dirty_lookup.end()){
-            dirty_count[dirty_address] = 0;
-            (dirty_lookup[dirty_address]).first = 0;
-            (dirty_lookup[dirty_address]).second =\
-                        (1<<(dirty_bit_pos%32));
-            dirty_count[dirty_address] += 1;
-        }
-        else{
-            /*set bit only if its not set previously*/
-            if (!((dirty_lookup[dirty_address]).second &\
-                   (1<<(dirty_bit_pos%32)))){
-                (dirty_lookup[dirty_address]).second |=\
-                         (1<<(dirty_bit_pos%32));
-                dirty_count[dirty_address] += 1;
-            }
-            if (dirty_count[dirty_address] == HIGH_WATERMARK)
-                proceed = 1;
-        }
-        /*issue the read request with the bitpos value
-         * information*/
-        if (proceed){
-            assert(dirty_packet.find(dirty_address) != dirty_packet.end());
-            tracker_pkts = dirty_packet[dirty_address];
-            tracker_req = tracker_pkts->req;
-            tracker_req->setFlags(Request::PHYSICAL);
-            tracker_req->setPaddr(dirty_address);
-            tracker_pkts->setAddr(dirty_address);
-            tracker_pkts->setTcmd(MemCmd::ReadReq);
-            tracker_pkts->setTSize(4);
-            tracker_pkts->setTracker(1);
-            uint32_t value = (dirty_lookup[dirty_address]).second;
-            tracker_pkts->setDirtybitPos(value);
-            dirty_count.erase(dirty_address);
-            dirty_lookup.erase(dirty_address);
-            dirty_packet.erase(dirty_address);
-            if (!dcachePort.sendTimingReq(tracker_pkts)) {
+        data_size = tracker_pkt->getSize();
+        log.addr = virtual_address;
+        log.size = data_size;
+        dirty_address = tracking_address+(log_count*sizeof(struct log_entry));
+        log_count += 1;
+        tracker_req->setFlags(Request::PHYSICAL);
+        tracker_req->setPaddr(dirty_address);
+        tracker_pkt->setAddr(dirty_address);
+        tracker_pkt->setTcmd(MemCmd::WriteReq);
+        tracker_pkt->setTSize(sizeof(struct log_entry));
+        tracker_pkt->setTracker(1);
+        tracker_pkt->setData((uint8_t*)&log);
+        if (!dcachePort.sendTimingReq(tracker_pkt)) {
                  std::cout<<"sending failed comparator"<<std::endl;
                 _trackerstatus = DcacheTrackerRetry;
-                dcache_tracker_pkt = tracker_pkts;
-            }
-            else {
+                dcache_tracker_pkt = tracker_pkt;
+        }
+        else {
                 DPRINTF(Stackp, "setting DcacheWaitResponse\n");
                 _trackerstatus = DcacheWaitTrackerResponse;
                 dcache_tracker_pkt = NULL;
                 num_dirty_packets += 1;
-                prosperstats.watermarkStores++;
-            }
         }
+        return;
     }
-    return;
 }
 
 Fault
@@ -1529,6 +1437,7 @@ TimingSimpleCPU::DcachePort::recvFunctionalSnoop(PacketPtr pkt)
 }
 
 //Added by KP Arun
+/*
 void
 TimingSimpleCPU::DcachePort::create_comparator_write(
                 PacketPtr tracker_pkt, uint16_t isdone){
@@ -1561,7 +1470,7 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
         cpu->prosperstats.bitmapStores++;
        }
       return;
-}
+}*/
 
 
 bool
@@ -1572,10 +1481,11 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
     //Added by KP Arun
     if (pkt->getTracker()){
         if (pkt->isRead()){
-            PacketPtr tracker_write_pkt = new Packet(pkt,0,1);
-            tracker_write_pkt->setTData(pkt);
+            //PacketPtr tracker_write_pkt = new Packet(pkt,0,1);
+            //tracker_write_pkt->setTData(pkt);
+            std::cout<<"Tracker read Resp: "<<pkt->getAddr()<<std::endl;
             delete pkt;
-            create_comparator_write(tracker_write_pkt,0);
+            //create_comparator_write(tracker_write_pkt,0);
         }
         if (pkt->isWrite()){
              cpu->dirty_tracking_done += 1;

@@ -67,6 +67,12 @@
 namespace gem5
 {
 
+struct log_entry
+{
+   Addr addr;
+   uint32_t size;
+};
+
 class TimingSimpleCPU : public BaseSimpleCPU
 {
   public:
