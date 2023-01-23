@@ -140,6 +140,10 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const ResponsePort&
         }
     } else { // if (!cpkt->needsResponse())
         assert(cpkt->isEviction());
+        // Added by Arun KP
+        if ((sf_item.holder & req_port).none()){
+             sf_item.holder |= req_port;
+        }
         // make sure that the sender actually had the line
         panic_if((sf_item.holder & req_port).none(), "requestor %x is not a " \
                  "holder :( SF value %x.%x\n", req_port,
@@ -367,7 +371,7 @@ SnoopFilter::updateResponse(const Packet* cpkt, const ResponsePort&
     //Added By KP Arun
     if (((sf_item.requested & response_mask).none()) && cpkt->getTracker()){
         //std::cout<<"tracker packet"<<std::endl;
-        return;
+        sf_item.requested |= response_mask;
     }
     // Make sure we have seen the actual request, too
     panic_if((sf_item.requested & response_mask).none(),

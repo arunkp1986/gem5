@@ -64,6 +64,7 @@
 
 namespace gem5
 {
+#define NVM_USER_REG_START 0x120001000
 
 namespace X86ISA {
 
@@ -103,7 +104,12 @@ Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
 bool
 Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
-    return walker->recvTimingResp(pkt);
+   if (pkt->getTracker()){
+       walker->ssp_packet_received += 1;
+       delete pkt;
+       return true;
+   }
+   return walker->recvTimingResp(pkt);
 }
 
 bool
@@ -143,6 +149,22 @@ Walker::WalkerPort::recvReqRetry()
 void
 Walker::recvReqRetry()
 {
+    if (retryingbitmap){
+        while (writesbitmap.size()) {
+            //std::cout<<"bitmap write retry"<<std::endl;
+            PacketPtr write = writesbitmap.back();
+            writesbitmap.pop_back();
+            if (!port.sendTimingReq(write)){
+                retryingbitmap = true;
+                writesbitmap.push_back(write);
+                break;
+            }
+            else{
+                ssp_packet_send += 1;
+            }
+            retryingbitmap = false;
+        }
+    }
     std::list<WalkerState *>::iterator iter;
     for (iter = currStates.begin(); iter != currStates.end(); iter++) {
         WalkerState * walkerState = *(iter);
@@ -186,6 +208,13 @@ Walker::WalkerState::initState(ThreadContext * _tc,
     tc = _tc;
     mode = _mode;
     timing = _isTiming;
+    walker->bitmap_address = 0;
+    if (timing){
+        //std::cout<<"inside"<<std::endl;
+        walker->bitmap_address = tc->readMiscRegNoEffect(\
+                        gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+        //walker->bitmap_address = 0;
+    }
 }
 
 void
@@ -285,13 +314,23 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     Fault fault = NoFault;
     write = NULL;
     PageTableEntry pte;
-    if (dataSize == 8)
-        pte = read->getLE<uint64_t>();
-    else
-        pte = read->getLE<uint32_t>();
+    static PageTableEntry pte_my;
+    unsigned ssp_offset = 0;
+    if (state == LongSSP1 || state==LongSSP2 || state==LongSSP3){
+        //std::cout<<"SSP"<<std::endl;
+        pte = pte_my;
+    }
+    else{
+        if (dataSize == 8)
+            pte = read->getLE<uint64_t>();
+        else
+            pte = read->getLE<uint32_t>();
+    }
     VAddr vaddr = entry.vaddr;
+    //std::cout<<"stepwalk vaddr: "<<std::hex<<vaddr<<std::endl;
     bool uncacheable = pte.pcd;
     Addr nextRead = 0;
+    Addr write_address = 0;
     bool doWrite = false;
     bool doTLBInsert = false;
     bool doEndWalk = false;
@@ -362,6 +401,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
       case LongPTE:
         DPRINTF(PageTableWalker,
                 "Got long mode PTE entry %#016x.\n", (uint64_t)pte);
+        pte_my = pte;
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = entry.writable && pte.w;
@@ -382,8 +422,76 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         entry.global = pte.g;
         entry.patBit = bits(pte, 12);
         entry.vaddr = entry.vaddr & ~((4 * (1 << 10)) - 1);
+        //doTLBInsert = true;
+        //doEndWalk = true;
+        if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
+            nextState = LongSSP1;
+            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            struct ssp_entry* temp_entry =
+                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+            nextRead = (Addr)&temp_entry->p1;
+        }else{
+            doTLBInsert = true;
+            doEndWalk = true;
+        }
+        break;
+      case LongSSP1:
+        //std::cout<<"SSP1 "<<std::endl;
+        if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
+            nextState = LongSSP2;
+            Addr p1;
+            read->getData((uint8_t *)&p1);
+            entry.p1 = p1;
+            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            struct ssp_entry* temp_entry =
+                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+            nextRead = (Addr)&temp_entry->current_bitmap;
+            //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
+            //std::cout<<"p0: "<<std::hex<<entry.paddr<<std::endl;
+            //std::cout<<"p1: "<<std::hex<<entry.p1<<std::endl;
+        }else{
+            doTLBInsert = true;
+            doEndWalk = true;
+        }
+        //doTLBInsert = true;
+        //doEndWalk = true;
+        //doWrite = false;
+        break;
+      case LongSSP2:
+        //std::cout<<"SSP2 "<<std::endl;
+        if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
+            nextState = LongSSP3;
+            uint64_t current_bitmap;
+            read->getData((uint8_t *)&current_bitmap);
+            entry.current_bitmap = current_bitmap;
+            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            struct ssp_entry* temp_entry =
+                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+            nextRead = (Addr)&temp_entry->updated_bitmap;
+            //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
+        }else{
+            doTLBInsert = true;
+            doEndWalk = true;
+        }
+        //doTLBInsert = true;
+        //doEndWalk = true;
+        //doWrite = false;
+        break;
+      case LongSSP3:
+        //std::cout<<"SSP3: "<<std::endl;
+        if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
+            uint64_t updated_bitmap;
+            read->getData((uint8_t *)&updated_bitmap);
+            entry.updated_bitmap = updated_bitmap;
+            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            struct ssp_entry* temp_entry =
+                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+            write_address = (Addr)&temp_entry->evicted;
+            //std::cout<<"updated bitmap: "<<updated_bitmap<<std::endl;
+        }
         doTLBInsert = true;
         doEndWalk = true;
+        doWrite = false;
         break;
       case PAEPDP:
         DPRINTF(PageTableWalker,
@@ -527,6 +635,20 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         } else {
             write = NULL;
         }
+        if (state == LongSSP3){
+        //change entry as not evicted in ssp cache
+            unsigned ssp_evict = 0;
+            Request::Flags ssp_flags = Request::PHYSICAL;
+            assert(write_address > 0);
+            RequestPtr ssp_req = std::make_shared<Request>(
+                            write_address, 4, ssp_flags,
+                            walker->getrequestorId());
+            PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
+            ssp_write->allocate();
+            ssp_write->setTracker(1);
+            ssp_write->setData((uint8_t*)&ssp_evict);
+            walker->sendTimingbitmap(ssp_write);
+        }
         if (doTLBInsert)
             if (!functional)
                 walker->tlb->insert(entry.vaddr, entry);
@@ -536,10 +658,19 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         //If we didn't return, we're setting up another read.
         Request::Flags flags = oldRead->req->getFlags();
         flags.set(Request::UNCACHEABLE, uncacheable);
-        RequestPtr request = std::make_shared<Request>(
-            nextRead, oldRead->getSize(), flags, walker->requestorId);
-        read = new Packet(request, MemCmd::ReadReq);
-        read->allocate();
+        if (state == LongPTE || state==LongSSP1 || state==LongSSP2){
+            //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
+            RequestPtr request = std::make_shared<Request>(
+                            nextRead,8, flags, walker->requestorId);
+            read = new Packet(request, MemCmd::ReadReq);
+            read->allocate();
+        }
+        else{
+           RequestPtr request = std::make_shared<Request>(
+             nextRead, oldRead->getSize(), flags, walker->requestorId);
+           read = new Packet(request, MemCmd::ReadReq);
+           read->allocate();
+        }
         // If we need to write, adjust the read packet to write the modified
         // value back to memory.
         if (doWrite) {
@@ -716,6 +847,13 @@ Walker::WalkerState::isRetrying()
 {
     return retrying;
 }
+
+bool
+Walker::isRetryingbitmap()
+{
+    return retryingbitmap;
+}
+
 
 bool
 Walker::WalkerState::isTiming()

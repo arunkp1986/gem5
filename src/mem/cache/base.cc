@@ -45,8 +45,6 @@
 
 #include "mem/cache/base.hh"
 
-#include <debug/Stackp.hh> //Added by KP Arun
-
 #include "base/compiler.hh"
 #include "base/logging.hh"
 #include "debug/Cache.hh"
@@ -104,7 +102,6 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
       forwardSnoops(true),
       clusivity(p.clusivity),
       isReadOnly(p.is_read_only),
-      isBypassDirty(p.is_bypass_dirty),
       replaceExpansions(p.replace_expansions),
       moveContractions(p.move_contractions),
       blocked(0),
@@ -125,14 +122,6 @@ BaseCache::BaseCache(const BaseCacheParams &p, unsigned blk_size)
     // whether the connected requestor is actually snooping or not
 
     tempBlock = new TempCacheBlk(blkSize);
-
-    //Added By KP Arun
-  //  if ((TrackerObject::tracker_l2cache == NULL)&&
-  //  ((this->name()).compare("system.cpu.l2cache") == 0)){
-   //     TrackerObject::tracker_l2cache = this;
-     //DPRINTF(Stackp,"inside base cache, l2cache:%p\n",
-     //TrackerObject::l2cache);
-    //}
 
     tags->tagsInit();
     if (prefetcher)
@@ -281,11 +270,9 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
             assert(!pkt->isWriteback());
             // CleanEvicts corresponding to blocks which have
             // outstanding requests in MSHRs are simply sunk here
-            assert(!(pkt->isWrite() && getisBypassDirty() &&\
-                                   pkt->getTracker()));
             if (pkt->cmd == MemCmd::CleanEvict) {
                 pendingDelete.reset(pkt);
-            } else if (pkt->cmd == MemCmd::WriteClean ) {
+            } else if (pkt->cmd == MemCmd::WriteClean) {
                 // A WriteClean should never coalesce with any
                 // outstanding cache maintenance requests.
 
@@ -324,15 +311,8 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
         stats.cmdStats(pkt).mshrMisses[pkt->req->requestorId()]++;
         if (prefetcher && pkt->isDemand())
             prefetcher->incrDemandMhsrMisses();
-        //if (pkt->isWrite() && getisBypassDirty() && pkt->getTracker()){
-           /*Added by KP Arun*
-           * This ensures that write requests from comparator
-           * are put into write buffer.
-           */
-          //  allocateWriteBuffer(pkt, forward_time);
-        // }
-        if (pkt->isEviction() || pkt->cmd == MemCmd::WriteClean ||\
-                (pkt->isWrite() && getisBypassDirty() && pkt->getTracker())) {
+
+        if (pkt->isEviction() || pkt->cmd == MemCmd::WriteClean) {
             // We use forward_time here because there is an
             // writeback or writeclean, forwarded to WriteBuffer.
             allocateWriteBuffer(pkt, forward_time);
@@ -440,6 +420,13 @@ void
 BaseCache::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
+    RequestPtr req1 = pkt->req;
+    if (req1->get_is_ssp_request()){
+        Addr p1 = req1->get_P1addr();
+        Addr pkt_addr = pkt->getAddr();
+        Addr pkt_new_addr = (p1 & ~0xfff)|(pkt_addr & 0xfff);
+        pkt->setAddr(pkt_new_addr);
+    }
 
     // all header delay should be paid for by the crossbar, unless
     // this is a prefetch response from above
@@ -455,14 +442,6 @@ BaseCache::recvTimingResp(PacketPtr pkt)
 
     DPRINTF(Cache, "%s: Handling response %s\n", __func__,
             pkt->print());
-    /*Added by KP Arun
-     *We will see a write response incase of comparator
-     */
-    if (pkt->isWrite() && pkt->getTracker() && getisBypassDirty()){
-        //std::cout<<"got tracker write response"<<std::endl;
-        handleUncacheableWriteResp(pkt);
-        return;
-    }
 
     // if this is a write, we should be looking at an uncacheable
     // write
@@ -514,14 +493,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
 
         const bool allocate = (writeAllocator && mshr->wasWholeLineWrite) ?
             writeAllocator->allocate() : mshr->allocOnFill();
-        // Added by KP Arun
-        // This ensures that read response for comparator at
-        // bypassed cache level is not filled into cache.
-        if (pkt->getTracker() && getisBypassDirty()){
-            blk = handleFill(pkt, blk, writebacks, 0);
-        }else{
-            blk = handleFill(pkt, blk, writebacks, allocate);
-        }
+        blk = handleFill(pkt, blk, writebacks, allocate);
         assert(blk != nullptr);
         ppFill->notify(pkt);
     }
@@ -1097,14 +1069,6 @@ BaseCache::satisfyRequest(PacketPtr pkt, CacheBlk *blk, bool, bool)
         // note that the line may be also be considered writable in
         // downstream caches along the path to memory, but always
         // Exclusive, and never Modified
-        if (!blk->isSet(CacheBlk::WritableBit)){
-            if (pkt->getTracker())
-                std::cout<<"tracker pkt"<<std::endl;
-            else
-                std::cout<<"not tracker pkt"<<std::endl;
-
-            std::cout<<"Address: "<<std::hex<<pkt->getAddr()<<std::endl;
-        }
         assert(blk->isSet(CacheBlk::WritableBit));
         // Write or WriteLine at the first cache with block in writable state
         if (blk->checkWrite(pkt)) {
@@ -1865,7 +1829,6 @@ BaseCache::sendMSHRQueuePacket(MSHR* mshr)
 
     CacheBlk *blk = tags->findBlock(mshr->blkAddr, mshr->isSecure);
 
-
     // either a prefetch that is not present upstream, or a normal
     // MSHR request, proceed to get the packet to send downstream
     PacketPtr pkt = createMissPacket(tgt_pkt, blk, mshr->needsWritable(),
@@ -2520,11 +2483,7 @@ bool
 BaseCache::CpuSidePort::recvTimingReq(PacketPtr pkt)
 {
     assert(pkt->isRequest());
-    /*if (cache->isBypassDirty && pkt->getTracker()){
-        bool success = cache->memSidePort.sendTimingReq(pkt);
-        assert(success);
-        return true;
-    }*/
+
     if (cache->system->bypassCaches()) {
         // Just forward the packet if caches are disabled.
         // @todo This should really enqueue the packet rather

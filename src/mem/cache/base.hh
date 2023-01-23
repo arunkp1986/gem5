@@ -884,10 +884,6 @@ class BaseCache : public ClockedObject
      */
     Tick nextQueueReadyTime() const;
 
-    /** Get cache object name*/
-    void get_cache_name(){
-        std::cout<<SimObject::name()<<std::endl;
-    }
     /** Block size of this cache */
     const unsigned blkSize;
 
@@ -945,11 +941,6 @@ class BaseCache : public ClockedObject
      * never have to do any writebacks).
      */
     const bool isReadOnly;
-    /*
-     * This denotes whether to bypass the cache for dirty bitmaps store
-     * Added by KP Arun
-     * */
-    bool isBypassDirty;
 
     /**
      * when a data expansion of a compressed block happens it will not be
@@ -1177,19 +1168,6 @@ class BaseCache : public ClockedObject
         return blkSize;
     }
 
-    /*Added by KP Arun for testing*/
-
-    bool
-    getisBypassDirty()
-    {
-        return isBypassDirty;
-    }
-    /*Added by KP Arun for recvTimingReq wrapper*/
-    void recvTimingReq_tracker(PacketPtr pkt){
-
-        recvTimingReq(pkt);
-
-    }
     const AddrRangeList &getAddrRanges() const { return addrRanges; }
 
     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)
@@ -1214,7 +1192,17 @@ class BaseCache : public ClockedObject
     {
         // should only see writes or clean evicts here
         assert(pkt->isWrite() || pkt->cmd == MemCmd::CleanEvict);
-
+        RequestPtr req1 = pkt->req;
+        if (req1->get_P1addr()>0){
+            Addr vaddr1 = req1->getVaddr();
+            std::cout<<this->name()<<std::endl;
+            std::cout<<"write buffer vaddr: "<<std::hex<<vaddr1<<std::endl;
+            /*Addr p1 = req1->get_P1addr();
+            Addr pkt_addr = pkt->getAddr();
+            Addr pkt_new_addr = (p1 & ~0xfff)|(pkt_addr & 0xfff);
+            pkt->setAddr(pkt_new_addr);
+            std::cout<<"cache allocateWriteBuffer ssp packet"<<std::endl;*/
+        }
         Addr blk_addr = pkt->getBlockAddr(blkSize);
 
         // If using compression, on evictions the block is decompressed and
@@ -1231,13 +1219,8 @@ class BaseCache : public ClockedObject
         if (wq_entry && !wq_entry->inService) {
             DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
         }
-        if (wq_entry && pkt->getTracker()){
-            //std::cout<<"got tracker packet in
-            //allocateWriteBuffer"<<std::endl;
-        }
 
         writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
-
 
         if (writeBuffer.isFull()) {
             setBlocked((BlockedCause)MSHRQueue_WriteBuffer);

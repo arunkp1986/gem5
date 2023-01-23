@@ -89,6 +89,7 @@ namespace X86ISA
                 Waiting,
                 // Long mode
                 LongPML4, LongPDP, LongPD, LongPTE,
+                LongSSP1, LongSSP2,LongSSP3,
                 // PAE legacy mode
                 PAEPDP, PAEPD, PAEPTE,
                 // Non PAE legacy mode with and without PSE
@@ -115,6 +116,7 @@ namespace X86ISA
             bool retrying;
             bool started;
             bool squashed;
+            Addr bitmap_address1;
           public:
             WalkerState(Walker * _walker, BaseMMU::Translation *_translation,
                         const RequestPtr &_req, bool _isFunctional = false) :
@@ -125,6 +127,14 @@ namespace X86ISA
                 retrying(false), started(false), squashed(false)
             {
             }
+            struct ssp_entry
+            {
+                Addr p0;
+                Addr p1;
+                uint64_t current_bitmap;
+                uint64_t updated_bitmap;
+                uint8_t evicted;
+            };
             void initState(ThreadContext * _tc, BaseMMU::Mode _mode,
                            bool _isTiming = false);
             Fault startWalk();
@@ -137,7 +147,7 @@ namespace X86ISA
             void retry();
             void squash();
             std::string name() const {return walker->name();}
-
+            struct ssp_entry bitmap_entry;
           private:
             void setupWalk(Addr vaddr);
             Fault stepWalk(PacketPtr &write);
@@ -161,6 +171,13 @@ namespace X86ISA
         };
 
       public:
+        Addr bitmap_address;
+        Addr get_bitmap_address(){return bitmap_address;}
+        bool retryingbitmap;
+        bool isRetryingbitmap();
+        uint32_t ssp_packet_send;
+        uint32_t ssp_packet_received;
+        std::vector<PacketPtr> writesbitmap;
         // Kick off the state machine.
         Fault start(ThreadContext * _tc, BaseMMU::Translation *translation,
                 const RequestPtr &req, BaseMMU::Mode mode);
@@ -168,7 +185,17 @@ namespace X86ISA
                 unsigned &logBytes, BaseMMU::Mode mode);
         Port &getPort(const std::string &if_name,
                       PortID idx=InvalidPortID) override;
-
+        bool sendTimingbitmap(PacketPtr pkt){
+            if (!port.sendTimingReq(pkt)){
+                writesbitmap.push_back(pkt);
+                retryingbitmap = true;
+                return false;
+            }
+            else{
+                ssp_packet_send += 1;
+            }
+            return true;
+        }
       protected:
         // The TLB we're supposed to load.
         TLB * tlb;
@@ -192,7 +219,9 @@ namespace X86ISA
         bool sendTiming(WalkerState * sendingState, PacketPtr pkt);
 
       public:
-
+        RequestorID getrequestorId(){
+            return requestorId;
+        }
         void setTLB(TLB * _tlb)
         {
             tlb = _tlb;
@@ -202,7 +231,9 @@ namespace X86ISA
 
         Walker(const Params &params) :
             ClockedObject(params), port(name() + ".port", this),
-            funcState(this, NULL, NULL, true), tlb(NULL), sys(params.system),
+            funcState(this, NULL, NULL, true),
+            ssp_packet_send(0), ssp_packet_received(0),
+            tlb(NULL), sys(params.system),
             requestorId(sys->getRequestorId(this)),
             numSquashable(params.num_squash_per_cycle),
             startWalkWrapperEvent([this]{ startWalkWrapper(); }, name())

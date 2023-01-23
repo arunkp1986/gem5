@@ -90,6 +90,10 @@ namespace X86ISA
         bool noExec;
         // A sequence number to keep track of LRU.
         uint64_t lruSeq;
+        //SSP metadata
+        Addr p1;
+        uint64_t current_bitmap; //current bitmap in bitmap cache
+        uint64_t updated_bitmap; //applied in commit bitmap in bitmap cache
 
         TlbEntryTrie::Handle trieHandle;
 

@@ -65,7 +65,14 @@ namespace X86ISA
         typedef std::list<TlbEntry *> EntryList;
 
         uint32_t configAddress;
-
+         struct ssp_entry
+         {
+                Addr p0;
+                Addr p1;
+                uint64_t current_bitmap;
+                uint64_t updated_bitmap;
+                uint8_t evicted;
+            };
       public:
 
         typedef X86TLBParams Params;
@@ -96,7 +103,6 @@ namespace X86ISA
         uint32_t size;
 
         std::vector<TlbEntry> tlb;
-
         EntryList freeList;
 
         TlbEntryTrie trie;
@@ -123,6 +129,8 @@ namespace X86ISA
       public:
 
         void evictLRU();
+        Addr setupSSP(const RequestPtr &req,
+                        TlbEntry *entry, BaseMMU::Mode mode);
 
         uint64_t
         nextSeq()

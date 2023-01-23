@@ -325,7 +325,7 @@ TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
     }
     return dcache_pkt == NULL;
 }
-
+/*
 void
 TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                           bool read)
@@ -342,15 +342,15 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     Addr tracking_address = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
     bitmap_address = tracking_address;
-    /*if (stack_start>1 && pkt->isWrite()){
+    if (stack_start>1 && pkt->isWrite()){
     std::cout<<"stack start: "<<std::hex<<stack_start<<std::endl;
     std::cout<<"stack end: "<<std::hex<<stack_end<<std::endl;
     std::cout<<"tracking address: "<<std::hex<<tracking_address<<std::endl;
     //std::cout<<"tracking gran: "<<std::hex<<tracking_log_gran<<std::endl;
     std::cout<<"address: "<<std::hex<<(req->getVaddr())<<std::endl;
-    }*/
-    /*here we are checking the tracking is still valid
-     * and vaddr in req is of interest*/
+    }
+    *here we are checking the tracking is still valid
+     * and vaddr in req is of interest
     if ((tracking_log_gran >= 1) &&\
                     ((0x1800000000 <= req->getVaddr()) && \
         (req->getVaddr() <= 0x8000000000)) && pkt->isWrite()){
@@ -385,7 +385,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         pkt->makeResponse();
         completeDataAccess(pkt);
     } else if (read) {
-        /*Read to bitmap area in byte granularity tracking*/
+        Read to bitmap area in byte granularity tracking
         if ((tracking_log_gran == 0) &&\
                         tracking_address &&\
                         (tracking_address <=
@@ -411,10 +411,10 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                                     gem5::X86ISA::MISCREG_TRACK_SYNC,\
                                     1);
                    std::cout<<"read list size: "<<read_list.size() <<std::endl;
-                   /* for (auto it = read_list.begin();
+                    for (auto it = read_list.begin();
                                     it != read_list.end(); it++){
                         //handleReadPacket(*it);
-                    }*/
+                    }
                     read_list.erase(read_list.begin(),read_list.end());
                     handleReadPacket(pkt);
                 }
@@ -453,6 +453,55 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
    if (!comparator_list.empty()){
        comparator();
    }
+}*/
+
+void
+TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
+                          bool read)
+{
+    SimpleExecContext &t_info = *threadInfo[curThread];
+    SimpleThread* thread = t_info.thread;
+
+    PacketPtr pkt = buildPacket(req, read);
+    pkt->dataDynamic<uint8_t>(data);
+
+    // hardware transactional memory
+    // If the core is in transactional mode or if the request is HtmCMD
+    // to abort a transaction, the packet should reflect that it is
+    // transactional and also contain a HtmUid for debugging.
+    const bool is_htm_speculative = t_info.inHtmTransactionalState();
+    if (is_htm_speculative || req->isHTMAbort()) {
+        pkt->setHtmTransactional(t_info.getHtmTransactionUid());
+    }
+    if (req->isHTMAbort())
+        DPRINTF(HtmCpu, "htmabort htmUid=%u\n", t_info.getHtmTransactionUid());
+
+    if (req->getFlags().isSet(Request::NO_ACCESS)) {
+        assert(!dcache_pkt);
+        pkt->makeResponse();
+        completeDataAccess(pkt);
+    } else if (read) {
+        handleReadPacket(pkt);
+    } else {
+        bool do_access = true;  // flag to suppress cache access
+
+        if (req->isLLSC()) {
+            do_access = thread->getIsaPtr()->handleLockedWrite(
+                    req, dcachePort.cacheBlockMask);
+        } else if (req->isCondSwap()) {
+            assert(res);
+            req->setExtraData(*res);
+        }
+
+        if (do_access) {
+            dcache_pkt = pkt;
+            handleWritePacket();
+            threadSnoop(pkt, curThread);
+        } else {
+            _status = DcacheWaitResponse;
+            completeDataAccess(pkt);
+        }
+    }
 }
 
 void
@@ -777,6 +826,7 @@ TimingSimpleCPU::comparator_selective_flush(){
 }
 */
 //limit the number of entries to lookup to 16, and water mark to 8,16,32
+/*
 void
 TimingSimpleCPU::comparator(){
     PacketPtr tracker_pkt = NULL;
@@ -828,7 +878,7 @@ TimingSimpleCPU::comparator(){
         return;
     }
 }
-
+*/
 Fault
 TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
                           Addr addr, Request::Flags flags, uint64_t *res,
@@ -1472,7 +1522,7 @@ TimingSimpleCPU::DcachePort::create_comparator_write(
       return;
 }*/
 
-
+/*
 bool
 TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 {
@@ -1512,15 +1562,36 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
             cpu->schedule(retryRespEvent, cpu->clockEdge(Cycles(1)));
         return false;
     }
+}*/
+
+bool
+TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
+{
+    DPRINTF(SimpleCPU, "Received load/store response %#x\n", pkt->getAddr());
+
+    // The timing CPU is not really ticked, instead it relies on the
+    // memory system (fetch and load/store) to set the pace.
+    if (!tickEvent.scheduled()) {
+        // Delay processing of returned data until next CPU clock edge
+        tickEvent.schedule(pkt, cpu->clockEdge());
+        return true;
+    } else {
+        // In the case of a split transaction and a cache that is
+        // faster than a CPU we could get two responses in the
+        // same tick, delay the second one
+        if (!retryRespEvent.scheduled())
+            cpu->schedule(retryRespEvent, cpu->clockEdge(Cycles(1)));
+        return false;
+    }
 }
 
 void
 TimingSimpleCPU::DcachePort::DTickEvent::process()
 {
-    if (pkt->getTracker()){
+    /*if (pkt->getTracker()){
         std::cout<<"inside dcacheport process"<<std::endl;
         return;
-    }
+    }*/
     cpu->completeDataAccess(pkt);
 }
 
