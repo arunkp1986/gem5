@@ -67,11 +67,11 @@ namespace X86ISA
         uint32_t configAddress;
          struct ssp_entry
          {
-                Addr p0;
-                Addr p1;
-                uint64_t current_bitmap;
-                uint64_t updated_bitmap;
-                uint8_t evicted;
+                unsigned long p0;
+                unsigned long p1;
+                unsigned long current_bitmap;
+                unsigned long updated_bitmap;
+                unsigned evicted;
             };
       public:
 

@@ -211,9 +211,9 @@ Walker::WalkerState::initState(ThreadContext * _tc,
     walker->bitmap_address = 0;
     if (timing){
         //std::cout<<"inside"<<std::endl;
-        walker->bitmap_address = tc->readMiscRegNoEffect(\
+        walker->bitmap_address = tc->readMiscRegNoEffect(
                         gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
-        //walker->bitmap_address = 0;
+       // walker->bitmap_address = 0;
     }
 }
 
@@ -315,7 +315,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     write = NULL;
     PageTableEntry pte;
     static PageTableEntry pte_my;
-    unsigned ssp_offset = 0;
+    unsigned long ssp_offset = 0;
     if (state == LongSSP1 || state==LongSSP2 || state==LongSSP3){
         //std::cout<<"SSP"<<std::endl;
         pte = pte_my;
@@ -426,9 +426,10 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         //doEndWalk = true;
         if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
             nextState = LongSSP1;
-            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+                    (struct ssp_entry*)(walker->bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
             nextRead = (Addr)&temp_entry->p1;
         }else{
             doTLBInsert = true;
@@ -442,9 +443,10 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             Addr p1;
             read->getData((uint8_t *)&p1);
             entry.p1 = p1;
-            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+                    (struct ssp_entry*)(walker->bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
             nextRead = (Addr)&temp_entry->current_bitmap;
             //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
             //std::cout<<"p0: "<<std::hex<<entry.paddr<<std::endl;
@@ -464,9 +466,10 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             uint64_t current_bitmap;
             read->getData((uint8_t *)&current_bitmap);
             entry.current_bitmap = current_bitmap;
-            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
+                    (struct ssp_entry*)(walker->bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
             nextRead = (Addr)&temp_entry->updated_bitmap;
             //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
         }else{
@@ -483,10 +486,11 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             uint64_t updated_bitmap;
             read->getData((uint8_t *)&updated_bitmap);
             entry.updated_bitmap = updated_bitmap;
-            ssp_offset = entry.paddr-NVM_USER_REG_START;
+            ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(walker->bitmap_address+ssp_offset);
-            write_address = (Addr)&temp_entry->evicted;
+                    (struct ssp_entry*)(walker->bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
+            write_address = (Addr)&(temp_entry->evicted);
             //std::cout<<"updated bitmap: "<<updated_bitmap<<std::endl;
         }
         doTLBInsert = true;
@@ -641,7 +645,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             Request::Flags ssp_flags = Request::PHYSICAL;
             assert(write_address > 0);
             RequestPtr ssp_req = std::make_shared<Request>(
-                            write_address, 4, ssp_flags,
+                            write_address, sizeof(unsigned), ssp_flags,
                             walker->getrequestorId());
             PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
             ssp_write->allocate();

@@ -84,6 +84,7 @@ TLB::setupSSP(const RequestPtr &req, TlbEntry *entry, BaseMMU::Mode mode){
     Addr vaddr = req->getVaddr();
     unsigned cacheline = (vaddr>>6)&0x3f;
     assert(cacheline < 64);
+    //assert(sizeof(entry->current_bitmap) == 8);
     if (entry->updated_bitmap & (1UL<<cacheline)){
         //std::cout<<"updated bitmap already set"<<std::endl;
         if (entry->current_bitmap & (1UL<<cacheline)){
@@ -114,7 +115,7 @@ TLB::evictLRU()
     // sequence number.
 
     unsigned lru = 0;
-    unsigned ssp_offset = 0;
+    unsigned long ssp_offset = 0;
     for (unsigned i = 1; i < size; i++) {
         if (tlb[i].lruSeq < tlb[lru].lruSeq)
             lru = i;
@@ -122,12 +123,14 @@ TLB::evictLRU()
     Addr bitmap_address = walker->get_bitmap_address();
     //std::cout<<"ssp offset tlb: "<<ssp_offset<<std::endl;
     if (bitmap_address >0 && (tlb[lru].paddr >= NVM_USER_REG_START)){
-        ssp_offset = tlb[lru].paddr-NVM_USER_REG_START;
+        ssp_offset = ((tlb[lru].paddr&~(0xfff))-NVM_USER_REG_START)>>12;
         struct ssp_entry* temp_entry =
-                (struct ssp_entry*)(bitmap_address+ssp_offset);
+                (struct ssp_entry*)(bitmap_address+
+                                (ssp_offset*sizeof(struct ssp_entry)));
         Request::Flags flags = Request::PHYSICAL;
         if (tlb[lru].current_bitmap > 0){
-            Addr write_address1 = (Addr)&temp_entry->current_bitmap;
+            Addr write_address1 = (Addr)&(temp_entry->current_bitmap);
+            //assert(sizeof(temp_entry->current_bitmap) == 8);
             RequestPtr request1 = std::make_shared<Request>(
                             write_address1, 8, flags,
                             walker->getrequestorId());
@@ -138,7 +141,8 @@ TLB::evictLRU()
             walker->sendTimingbitmap(write1);
         }
         if (tlb[lru].updated_bitmap>0){
-            Addr write_address2 = (Addr)&temp_entry->updated_bitmap;
+            Addr write_address2 = (Addr)&(temp_entry->updated_bitmap);
+            //assert(sizeof(temp_entry->updated_bitmap) == 8);
             RequestPtr request2 = std::make_shared<Request>(
                             write_address2, 8, flags,
                             walker->getrequestorId());
@@ -148,9 +152,10 @@ TLB::evictLRU()
             write2->setTracker(1);
             walker->sendTimingbitmap(write2);
             unsigned evicted = 1;
-            Addr write_address3 = (Addr)&temp_entry->evicted;
+            Addr write_address3 = (Addr)&(temp_entry->evicted);
+            //assert(sizeof(temp_entry->evicted) == 4);
             RequestPtr request3 = std::make_shared<Request>(
-                            write_address3, 4, flags,
+                            write_address3, sizeof(unsigned), flags,
                             walker->getrequestorId());
             PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
             write3->allocate();
@@ -203,17 +208,18 @@ TLB::flushAll()
 {
     DPRINTF(TLB, "Invalidating all entries.\n");
     Addr bitmap_address = walker->get_bitmap_address();
-    unsigned ssp_offset = 0;
+    unsigned long ssp_offset = 0;
     Request::Flags flags = Request::PHYSICAL;
     for (unsigned i = 0; i < size; i++) {
         //std::cout<<"i: "<<i<<",ssp offset tlb: "<<ssp_offset<<std::endl;
         if (bitmap_address > 0 && (tlb[i].paddr >= NVM_USER_REG_START)){
-            ssp_offset = tlb[i].paddr-NVM_USER_REG_START;
+            ssp_offset = ((tlb[i].paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(bitmap_address+ssp_offset);
+                    (struct ssp_entry*)(bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
             if (tlb[i].current_bitmap > 0){
                 //std::cout<<"flushall current bitmap write"<<std::endl;
-                Addr write_address1 = (Addr)&temp_entry->current_bitmap;
+                Addr write_address1 = (Addr)&(temp_entry->current_bitmap);
                 RequestPtr request1 = std::make_shared<Request>(
                                 write_address1, 8, flags,
                                 walker->getrequestorId());
@@ -225,7 +231,7 @@ TLB::flushAll()
             }
             if (tlb[i].updated_bitmap > 0){
                 //std::cout<<"flushall update bitmap write"<<std::endl;
-                Addr write_address2 = (Addr)&temp_entry->updated_bitmap;
+                Addr write_address2 = (Addr)&(temp_entry->updated_bitmap);
                 RequestPtr request2 = std::make_shared<Request>(
                                 write_address2, 8, flags,
                                 walker->getrequestorId());
@@ -235,9 +241,9 @@ TLB::flushAll()
                 write2->setTracker(1);
                 walker->sendTimingbitmap(write2);
                 unsigned evicted = 1;
-                Addr write_address3 = (Addr)&temp_entry->evicted;
+                Addr write_address3 = (Addr)&(temp_entry->evicted);
                 RequestPtr request3 = std::make_shared<Request>(
-                                write_address3, 4, flags,
+                                write_address3, sizeof(unsigned), flags,
                                 walker->getrequestorId());
                 PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
                 write3->allocate();
@@ -266,14 +272,16 @@ TLB::flushNonGlobal()
     DPRINTF(TLB, "Invalidating all non global entries.\n");
     Addr bitmap_address = walker->get_bitmap_address();
     Request::Flags flags = Request::PHYSICAL;
-    unsigned ssp_offset = 0;
+    unsigned long ssp_offset = 0;
     for (unsigned i = 0; i < size; i++) {
         if (bitmap_address >0 && (tlb[i].paddr >= NVM_USER_REG_START)){
-            ssp_offset = tlb[i].paddr-NVM_USER_REG_START;
+            ssp_offset = ((tlb[i].paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(bitmap_address+ssp_offset);
+                    (struct ssp_entry*)(bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
             if (tlb[i].current_bitmap > 0){
-                Addr write_address1 = (Addr)&temp_entry->current_bitmap;
+                Addr write_address1 = (Addr)&(temp_entry->current_bitmap);
+                //assert(sizeof(temp_entry->current_bitmap) == 8);
                 RequestPtr request1 = std::make_shared<Request>(
                                 write_address1, 8, flags,
                                 walker->getrequestorId());
@@ -284,7 +292,8 @@ TLB::flushNonGlobal()
                 walker->sendTimingbitmap(write1);
             }
             if (tlb[i].updated_bitmap > 0){
-                Addr write_address2 = (Addr)&temp_entry->updated_bitmap;
+                Addr write_address2 = (Addr)&(temp_entry->updated_bitmap);
+                //assert(sizeof(temp_entry->updated_bitmap) == 8);
                 RequestPtr request2 = std::make_shared<Request>(
                                 write_address2, 8, flags,
                                 walker->getrequestorId());
@@ -294,9 +303,10 @@ TLB::flushNonGlobal()
                 write2->setTracker(1);
                 walker->sendTimingbitmap(write2);
                 unsigned evicted = 1;
-                Addr write_address3 = (Addr)&temp_entry->evicted;
+                Addr write_address3 = (Addr)&(temp_entry->evicted);
+                //assert(sizeof(temp_entry->evicted) == 4);
                 RequestPtr request3 = std::make_shared<Request>(
-                                write_address3, 4, flags,
+                                write_address3, sizeof(unsigned), flags,
                                 walker->getrequestorId());
                 PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
                 write3->allocate();
@@ -319,13 +329,15 @@ TLB::demapPage(Addr va, uint64_t asn)
     TlbEntry *entry = trie.lookup(va);
     if (entry) {
         Addr bitmap_address = walker->get_bitmap_address();
+        unsigned long ssp_offset = 0;
         if (bitmap_address >0 && (entry->paddr >= NVM_USER_REG_START)){
-            unsigned ssp_offset = entry->paddr-NVM_USER_REG_START;
+            ssp_offset = ((entry->paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(bitmap_address+ssp_offset);
+                    (struct ssp_entry*)(bitmap_address+
+                                    (ssp_offset*sizeof(struct ssp_entry)));
             Request::Flags flags = Request::PHYSICAL;
             if (entry->current_bitmap > 0){
-                Addr write_address1 = (Addr)&temp_entry->current_bitmap;
+                Addr write_address1 = (Addr)&(temp_entry->current_bitmap);
                 RequestPtr request1 = std::make_shared<Request>(
                                 write_address1, 8, flags,
                                 walker->getrequestorId());
@@ -336,7 +348,7 @@ TLB::demapPage(Addr va, uint64_t asn)
                 walker->sendTimingbitmap(write1);
             }
             if (entry->updated_bitmap>0){
-                Addr write_address2 = (Addr)&temp_entry->updated_bitmap;
+                Addr write_address2 = (Addr)&(temp_entry->updated_bitmap);
                 RequestPtr request2 = std::make_shared<Request>(
                                 write_address2, 8, flags,
                                 walker->getrequestorId());
@@ -346,9 +358,9 @@ TLB::demapPage(Addr va, uint64_t asn)
                 write2->setTracker(1);
                 walker->sendTimingbitmap(write2);
                 unsigned evicted = 1;
-                Addr write_address3 = (Addr)&temp_entry->evicted;
+                Addr write_address3 = (Addr)&(temp_entry->evicted);
                 RequestPtr request3 = std::make_shared<Request>(
-                                write_address3, 4, flags,
+                                write_address3, sizeof(unsigned), flags,
                                 walker->getrequestorId());
                 PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
                 write3->allocate();
@@ -655,34 +667,32 @@ TLB::translate(const RequestPtr &req,
                         ssp_flag_start = 1;
 
                 }}
-                else{
-                    if (!ssp_flag_end){
-                        ssp_flag_end = 1;
-                        ssp_flag_start = 0;
-                        //std::cout<<"ssp flag end only once"<<std::endl;
-                        unsigned ssp_offset = 0;
-                        for (unsigned i = 1; i < size; i++) {
-                            if (tlb[i].updated_bitmap >0 &&
-                                    (tlb[i].paddr >= NVM_USER_REG_START)){
-                                ssp_offset = tlb[i].paddr-NVM_USER_REG_START;
-                                struct ssp_entry* temp_entry =
-                                   (struct ssp_entry*)(bitmap_address
-                                                   +ssp_offset);
-                                Addr write_address =
-                                        (Addr)&temp_entry->updated_bitmap;
-                                Request::Flags flags = Request::PHYSICAL;
-                                RequestPtr request =
-                                        std::make_shared<Request>(\
+         else{
+             if (!ssp_flag_end){
+                 ssp_flag_end = 1;
+                 ssp_flag_start = 0;
+                 unsigned long ssp_offset = 0;
+                 for (unsigned i = 1; i < size; i++) {
+                     if (tlb[i].updated_bitmap >0 &&
+                           (tlb[i].paddr >= NVM_USER_REG_START)){
+                         ssp_offset = ((tlb[i].paddr&~(0xfff))-
+                                         NVM_USER_REG_START)>>12;
+                         struct ssp_entry* temp_entry =
+                                   (struct ssp_entry*)(bitmap_address+
+                                      (ssp_offset*sizeof(struct ssp_entry)));
+                         Addr write_address =
+                                 (Addr)&(temp_entry->updated_bitmap);
+                         Request::Flags flags = Request::PHYSICAL;
+                         RequestPtr request = std::make_shared<Request>(\
                                                 write_address, 8, flags,
                                                 walker->getrequestorId());
-                                PacketPtr write = new Packet(
-                                                request, MemCmd::WriteReq);
-                                write->allocate();
-                                write->setData(
-                                        (uint8_t*)&(tlb[i].updated_bitmap));
-                                write->setTracker(1);
-                                walker->sendTimingbitmap(write);
-                                }}
+                         PacketPtr write = new Packet(
+                                         request, MemCmd::WriteReq);
+                         write->allocate();
+                         write->setData((uint8_t*)&(tlb[i].updated_bitmap));
+                         write->setTracker(1);
+                         walker->sendTimingbitmap(write);
+                     }}
                     }
                     else{
                         if (walker->ssp_packet_send ==
