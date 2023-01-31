@@ -9,13 +9,9 @@ if [[ $# -ne 3 ]];then
     exit 2
 fi
 
-rm PhyMem.0
-rm PhyMem.1
-
 echo $outdir
 echo $kernel
 echo $disk
 
 
 ./build/X86/gem5.opt --outdir=$outdir configs/example/fs.py --mem-size=3GB --nvm-size=2GB --caches --l3cache --cpu-type TimingSimpleCPU --hybrid-channel True --mem-type=DDR4_2400_16x4 --nvm-type=NVM_2666_1x64 --kernel=$kernel --disk-image=$disk
-
