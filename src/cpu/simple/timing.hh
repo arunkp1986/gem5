@@ -43,6 +43,7 @@
 
 #include <atomic>
 #include <list>
+#include <vector>
 
 #include "arch/generic/mmu.hh"
 #include "base/statistics.hh"
@@ -283,8 +284,10 @@ class TimingSimpleCPU : public BaseSimpleCPU
     PacketPtr ifetch_pkt;
     PacketPtr dcache_pkt;
     PacketPtr dcache_tracker_pkt;
+    std::vector<PacketPtr> list_tracker_pkt;
     uint16_t num_dirty_packets;
     uint16_t dirty_tracking_done;
+    uint32_t temp_log_count;
     Addr bitmap_address;
     uint8_t flag;
     std::atomic<std::uint8_t> bitset_pending;
