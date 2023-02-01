@@ -104,7 +104,7 @@ Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
 bool
 Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
-   if (pkt->getTracker()){
+   if (pkt->getSSP()){
        walker->ssp_packet_received += 1;
        delete pkt;
        return true;
@@ -212,7 +212,7 @@ Walker::WalkerState::initState(ThreadContext * _tc,
     if (timing){
         //std::cout<<"inside"<<std::endl;
         walker->bitmap_address = tc->readMiscRegNoEffect(
-                        gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
+                        gem5::X86ISA::MISCREG_SSP_ADDR);
        // walker->bitmap_address = 0;
     }
 }
@@ -649,7 +649,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                             walker->getrequestorId());
             PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
             ssp_write->allocate();
-            ssp_write->setTracker(1);
+            ssp_write->setSSP(1);
             ssp_write->setData((uint8_t*)&ssp_evict);
             walker->sendTimingbitmap(ssp_write);
         }

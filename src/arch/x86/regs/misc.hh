@@ -403,7 +403,9 @@ namespace X86ISA
         MISCREG_LOG_TRACK_GRAN,
         MISCREG_TRACK_USER,
         MISCREG_TRACK_SYNC,
-
+        MISCREG_SSP_START,
+        MISCREG_SSP_END,
+        MISCREG_SSP_ADDR,
 
         // "Fake" MSRs for internally implemented devices
         MISCREG_PCI_CONFIG_ADDRESS,

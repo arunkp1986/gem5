@@ -416,6 +416,7 @@ class Packet : public Printable
   public:
 
     uint8_t tracker_pkt;
+    uint8_t ssp_pkt;
     /**
      * The extra delay from seeing the packet until the header is
      * transmitted. This delay is used to communicate the crossbar
@@ -787,8 +788,10 @@ class Packet : public Printable
     Addr getAddr() const { assert(flags.isSet(VALID_ADDR)); return addr; }
 
     void setTracker(uint8_t value) { tracker_pkt = value; }
+    void setSSP(uint8_t value) { ssp_pkt = value; }
     void setDirtybitPos(uint32_t value) { dirtybit_pos = value; }
     uint8_t getTracker() const { return tracker_pkt; }
+    uint8_t getSSP() const { return ssp_pkt; }
     uint32_t getDirtybitPos() const { return dirtybit_pos; }
     /**
      * Update the address of this packet mid-transaction. This is used
@@ -864,7 +867,7 @@ class Packet : public Printable
            data(nullptr), addr(0), _isSecure(false), size(0),
            _qosValue(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),tracker_pkt(0),
+           htmTransactionUid(0),tracker_pkt(0),ssp_pkt(0),
            headerDelay(0), snoopDelay(0),
            payloadDelay(0), senderState(NULL)
     {
@@ -905,7 +908,7 @@ class Packet : public Printable
            data(nullptr), addr(0), _isSecure(false),
            _qosValue(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),tracker_pkt(0),
+           htmTransactionUid(0),tracker_pkt(0),ssp_pkt(0),
            headerDelay(0),
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
@@ -935,6 +938,7 @@ class Packet : public Printable
            dirtybit_pos(pkt->dirtybit_pos),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
            htmTransactionUid(0),tracker_pkt(pkt->tracker_pkt),
+           ssp_pkt(pkt->ssp_pkt),
            headerDelay(pkt->headerDelay),
            snoopDelay(0),
            payloadDelay(pkt->payloadDelay),
