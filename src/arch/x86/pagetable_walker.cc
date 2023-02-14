@@ -105,9 +105,24 @@ bool
 Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
    if (pkt->getTracker()){
+       if (pkt->isRead()){
+           //std::cout<<"read response"<<std::endl;
+           //std::cout<<"received: "<<walker->ssp_packet_received<<std::endl;
+           uint8_t data[4];
+           pkt->getData(data);
+           //std::cout<<"value: "<<*(unsigned*)data<<std::endl;
+           unsigned temp = 3;
+           memcpy(data,&temp,4);
+           pkt->setData(data);
+           pkt->setTcmd(MemCmd::WriteReq);
+           pkt->setTracker(1);
+           walker->sendTimingbitmap(pkt);
+           return true;
+       }else{
        walker->ssp_packet_received += 1;
        delete pkt;
        return true;
+       }
    }
    return walker->recvTimingResp(pkt);
 }
@@ -213,7 +228,7 @@ Walker::WalkerState::initState(ThreadContext * _tc,
         //std::cout<<"inside"<<std::endl;
         walker->bitmap_address = tc->readMiscRegNoEffect(
                         gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
-       // walker->bitmap_address = 0;
+        //walker->bitmap_address = 0;
     }
 }
 
@@ -448,6 +463,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                     (struct ssp_entry*)(walker->bitmap_address+
                                     (ssp_offset*sizeof(struct ssp_entry)));
             nextRead = (Addr)&temp_entry->current_bitmap;
+            write_address = (Addr)&(temp_entry->evicted);
             //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
             //std::cout<<"p0: "<<std::hex<<entry.paddr<<std::endl;
             //std::cout<<"p1: "<<std::hex<<entry.p1<<std::endl;
@@ -486,11 +502,11 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             uint64_t updated_bitmap;
             read->getData((uint8_t *)&updated_bitmap);
             entry.updated_bitmap = updated_bitmap;
-            ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
+            /*ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
             struct ssp_entry* temp_entry =
                     (struct ssp_entry*)(walker->bitmap_address+
                                     (ssp_offset*sizeof(struct ssp_entry)));
-            write_address = (Addr)&(temp_entry->evicted);
+            write_address = (Addr)&(temp_entry->evicted);*/
             //std::cout<<"updated bitmap: "<<updated_bitmap<<std::endl;
         }
         doTLBInsert = true;
@@ -639,7 +655,26 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         } else {
             write = NULL;
         }
-        if (state == LongSSP3){
+        /*if (state == LongSSP3){
+        //change entry as not evicted in ssp cache
+            unsigned ssp_evict = 0;
+            Request::Flags ssp_flags = Request::PHYSICAL;
+            assert(write_address > 0);
+            RequestPtr ssp_req = std::make_shared<Request>(
+                            write_address, sizeof(unsigned), ssp_flags,
+                            walker->getrequestorId());
+            PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
+            ssp_write->allocate();
+            ssp_write->setTracker(1);
+            ssp_write->setData((uint8_t*)&ssp_evict);
+            walker->sendTimingbitmap(ssp_write);
+        }*/
+        if (doTLBInsert)
+            if (!functional)
+                walker->tlb->insert(entry.vaddr, entry);
+        endWalk();
+    } else {
+         if (state == LongSSP1){
         //change entry as not evicted in ssp cache
             unsigned ssp_evict = 0;
             Request::Flags ssp_flags = Request::PHYSICAL;
@@ -653,11 +688,6 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             ssp_write->setData((uint8_t*)&ssp_evict);
             walker->sendTimingbitmap(ssp_write);
         }
-        if (doTLBInsert)
-            if (!functional)
-                walker->tlb->insert(entry.vaddr, entry);
-        endWalk();
-    } else {
         PacketPtr oldRead = read;
         //If we didn't return, we're setting up another read.
         Request::Flags flags = oldRead->req->getFlags();

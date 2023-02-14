@@ -212,8 +212,8 @@ PhysicalMemory::createBackingStore(
         }
         else{
             map_flags = MAP_SHARED;
-            std::cout << "calling fallocate of size " \
-                    << range.size() << std::endl;
+            //std::cout << "calling fallocate of size " \
+              //      << range.size() << std::endl;
             assert(posix_fallocate(fd, 0, range.size()) == 0);
             shm_fd = fd;
         }

@@ -147,7 +147,7 @@ namespace X86ISA
             void retry();
             void squash();
             std::string name() const {return walker->name();}
-            struct ssp_entry bitmap_entry;
+            //struct ssp_entry bitmap_entry;
           private:
             void setupWalk(Addr vaddr);
             Fault stepWalk(PacketPtr &write);
