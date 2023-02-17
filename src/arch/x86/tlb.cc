@@ -143,7 +143,7 @@ TLB::evictLRU()
                             walker->getrequestorId());
             PacketPtr write1 = new Packet(request1, MemCmd::WriteReq);
             write1->allocate();
-            write1->setTracker(1);
+            write1->setSSP(1);
             write1->setData((uint8_t*)&(tlb[lru].current_bitmap));
             walker->sendTimingbitmap(write1);
         }
@@ -155,7 +155,7 @@ TLB::evictLRU()
             PacketPtr write2 = new Packet(request2, MemCmd::WriteReq);
             write2->allocate();
             write2->setData((uint8_t*)&(tlb[lru].updated_bitmap));
-            write2->setTracker(1);
+            write2->setSSP(1);
             walker->sendTimingbitmap(write2);
             unsigned evicted = 1;
             Addr write_address3 = (Addr)&(temp_entry->evicted);
@@ -165,7 +165,7 @@ TLB::evictLRU()
             PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
             write3->allocate();
             write3->setData((uint8_t*)&evicted);
-            write3->setTracker(1);
+            write3->setSSP(1);
             walker->sendTimingbitmap(write3);
         }
     }
@@ -231,7 +231,7 @@ TLB::flushAll()
                 PacketPtr write1 = new Packet(request1, MemCmd::WriteReq);
                 write1->allocate();
                 write1->setData((uint8_t*)&(tlb[i].current_bitmap));
-                write1->setTracker(1);
+                write1->setSSP(1);
                 walker->sendTimingbitmap(write1);
             }
             if (tlb[i].updated_bitmap > 0){
@@ -243,7 +243,7 @@ TLB::flushAll()
                 PacketPtr write2 = new Packet(request2, MemCmd::WriteReq);
                 write2->allocate();
                 write2->setData((uint8_t*)&(tlb[i].updated_bitmap));
-                write2->setTracker(1);
+                write2->setSSP(1);
                 walker->sendTimingbitmap(write2);
                 unsigned evicted = 1;
                 Addr write_address3 = (Addr)&(temp_entry->evicted);
@@ -253,7 +253,7 @@ TLB::flushAll()
                 PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
                 write3->allocate();
                 write3->setData((uint8_t*)&evicted);
-                write3->setTracker(1);
+                write3->setSSP(1);
                 walker->sendTimingbitmap(write3);
             }
         }
@@ -293,7 +293,7 @@ TLB::flushNonGlobal()
                 PacketPtr write1 = new Packet(request1, MemCmd::WriteReq);
                 write1->allocate();
                 write1->setData((uint8_t*)&(tlb[i].current_bitmap));
-                write1->setTracker(1);
+                write1->setSSP(1);
                 walker->sendTimingbitmap(write1);
             }
             if (tlb[i].updated_bitmap > 0){
@@ -305,7 +305,7 @@ TLB::flushNonGlobal()
                 PacketPtr write2 = new Packet(request2, MemCmd::WriteReq);
                 write2->allocate();
                 write2->setData((uint8_t*)&(tlb[i].updated_bitmap));
-                write2->setTracker(1);
+                write2->setSSP(1);
                 walker->sendTimingbitmap(write2);
                 unsigned evicted = 1;
                 Addr write_address3 = (Addr)&(temp_entry->evicted);
@@ -316,7 +316,7 @@ TLB::flushNonGlobal()
                 PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
                 write3->allocate();
                 write3->setData((uint8_t*)&evicted);
-                write3->setTracker(1);
+                write3->setSSP(1);
                 walker->sendTimingbitmap(write3);
             }
         }
@@ -349,7 +349,7 @@ TLB::demapPage(Addr va, uint64_t asn)
                 PacketPtr write1 = new Packet(request1, MemCmd::WriteReq);
                 write1->allocate();
                 write1->setData((uint8_t*)&(entry->current_bitmap));
-                write1->setTracker(1);
+                write1->setSSP(1);
                 walker->sendTimingbitmap(write1);
             }
             if (entry->updated_bitmap>0){
@@ -361,7 +361,7 @@ TLB::demapPage(Addr va, uint64_t asn)
                 PacketPtr write2 = new Packet(request2, MemCmd::WriteReq);
                 write2->allocate();
                 write2->setData((uint8_t*)&(entry->updated_bitmap));
-                write2->setTracker(1);
+                write2->setSSP(1);
                 walker->sendTimingbitmap(write2);
                 unsigned evicted = 1;
                 Addr write_address3 = (Addr)&(temp_entry->evicted);
@@ -371,7 +371,7 @@ TLB::demapPage(Addr va, uint64_t asn)
                 PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
                 write3->allocate();
                 write3->setData((uint8_t*)&evicted);
-                write3->setTracker(1);
+                write3->setSSP(1);
                 walker->sendTimingbitmap(write3);
             }
         }
@@ -562,7 +562,7 @@ TLB::translate(const RequestPtr &req,
                 PacketPtr read = new Packet(request1, MemCmd::ReadReq);
                 read->allocate();
                 //write1->setData((uint8_t*)&evicted);
-                read->setTracker(1);
+                read->setSSP(1);
                 walker->sendTimingbitmap(read);
             }
         }

@@ -104,7 +104,8 @@ Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
 bool
 Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
-   if (pkt->getTracker()){
+   if (pkt->getSSP()){
+       walker->ssp_packet_received += 1;
        if (pkt->isRead()){
            //std::cout<<"read response"<<std::endl;
            //std::cout<<"received: "<<walker->ssp_packet_received<<std::endl;
@@ -115,13 +116,12 @@ Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
            memcpy(data,&temp,4);
            pkt->setData(data);
            pkt->setTcmd(MemCmd::WriteReq);
-           pkt->setTracker(1);
+           pkt->setSSP(1);
            walker->sendTimingbitmap(pkt);
            return true;
        }else{
-       walker->ssp_packet_received += 1;
-       delete pkt;
-       return true;
+           delete pkt;
+           return true;
        }
    }
    return walker->recvTimingResp(pkt);
@@ -665,7 +665,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                             walker->getrequestorId());
             PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
             ssp_write->allocate();
-            ssp_write->setTracker(1);
+            ssp_write->setSSP(1);
             ssp_write->setData((uint8_t*)&ssp_evict);
             walker->sendTimingbitmap(ssp_write);
         }*/
@@ -684,7 +684,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                             walker->getrequestorId());
             PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
             ssp_write->allocate();
-            ssp_write->setTracker(1);
+            ssp_write->setSSP(1);
             ssp_write->setData((uint8_t*)&ssp_evict);
             walker->sendTimingbitmap(ssp_write);
         }

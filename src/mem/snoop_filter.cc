@@ -369,7 +369,7 @@ SnoopFilter::updateResponse(const Packet* cpkt, const ResponsePort&
     DPRINTF(SnoopFilter, "%s:   old SF value %x.%x\n",
             __func__,  sf_item.requested, sf_item.holder);
     //Added By KP Arun
-    if (((sf_item.requested & response_mask).none()) && cpkt->getTracker()){
+    if (((sf_item.requested & response_mask).none()) && cpkt->getSSP()){
         //std::cout<<"tracker packet"<<std::endl;
         sf_item.requested |= response_mask;
     }

@@ -281,8 +281,18 @@ class CacheBlk : public TaggedEntry
         whenReady = tick;
     }
 
+    void new_setWhenReady(const Tick tick)
+    {
+        //assert(tick >= _tickInserted);
+        whenReady = tick;
+    }
+
+
     /** Get the task id associated to this block. */
     uint32_t getTaskId() const { return _taskId; }
+
+    /** Get the task id associated to this block. */
+    //uint32_t getTaskId() const { return _taskId; }
 
     /** Get the requestor id associated to this block. */
     uint32_t getSrcRequestorId() const { return _srcRequestorId; }
