@@ -89,7 +89,7 @@ TLB::setupSSP(Addr bitmap_address, const RequestPtr &req,
     assert(cacheline < 64);
     req->set_is_ssp_request(0);
     if (!entry->p1){
-        std::cout<<"p1 is zero"<<std::endl;
+        std::cout<<"p1 is zero"<<std::hex<<entry->paddr<<std::endl;
         return entry->paddr;
     }
     if (entry->updated_bitmap & (1UL<<cacheline)){
@@ -572,7 +572,7 @@ TLB::translate(const RequestPtr &req,
     if (tracking_log_gran == 0 &&
                     (bitmap_address <= vaddr &&
                     vaddr<(bitmap_address+64)) && !ssp_flag_end){
-        std::cout<<"flushing updated bitmap at end"<<std::endl;
+        //std::cout<<"flushing updated bitmap at end"<<std::endl;
         //ssp_flag_start = 0;
         ssp_flag_end = 1;
         for (int i = 1; i < size; i++){
@@ -737,6 +737,7 @@ TLB::translate(const RequestPtr &req,
                 //std::cout<<"vaddr: "<<std::hex<<vaddr<<std::endl;
                 //std::cout<<"start: "<<std::hex<<addr_start<<std::endl;
                 //std::cout<<"end: "<<std::hex<<addr_end<<std::endl;
+                //std::cout<<"paddr: "<<std::hex<<entry->paddr<<std::endl;
                 Addr ssp_paddr = setupSSP(bitmap_address,req,entry,mode);
                 paddr = ssp_paddr | (vaddr & mask(entry->logBytes));
             }
