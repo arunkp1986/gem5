@@ -52,6 +52,7 @@
 #include <cassert>
 #include <cstdint>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -262,6 +263,8 @@ class Request
         funcRequestorId = 1,
         /** This requestor id is used for message signaled interrupts */
         intRequestorId = 2,
+        /**/
+        dirtyRequestorId = 3,
         /**
          * Invalid requestor id for assertion checking only. It is
          * invalid behavior to ever send this id as part of a request.
@@ -367,6 +370,7 @@ class Request
      * is set.
      */
     Addr _paddr = 0;
+    Addr _p1 = 0;
 
     /**
      * The size of the request. This field must be set when vaddr or
@@ -447,6 +451,8 @@ class Request
     /** The cause for HTM transaction abort */
     HtmFailureFaultCause _htmAbortCause = HtmFailureFaultCause::INVALID;
 
+    uint8_t is_ssp_request = 0;
+
   public:
 
     /**
@@ -479,7 +485,9 @@ class Request
     }
 
     Request(const Request& other)
-        : _paddr(other._paddr), _size(other._size),
+        : _paddr(other._paddr),
+           _p1(other._p1),
+           _size(other._size),
           _byteEnable(other._byteEnable),
           _requestorId(other._requestorId),
           _flags(other._flags),
@@ -490,14 +498,52 @@ class Request
           _extraData(other._extraData), _contextId(other._contextId),
           _pc(other._pc), _reqInstSeqNum(other._reqInstSeqNum),
           _localAccessor(other._localAccessor),
+          is_ssp_request(other.is_ssp_request),
           translateDelta(other.translateDelta),
           accessDelta(other.accessDelta), depth(other.depth)
     {
         atomicOpFunctor.reset(other.atomicOpFunctor ?
                                 other.atomicOpFunctor->clone() : nullptr);
     }
+   /*
+    Request(const RequestPtr other)
+        : _paddr(other->_paddr), _size(other->_size),
+          _byteEnable(other->_byteEnable),
+          _requestorId(other->_requestorId),
+          _flags(other->_flags),
+          _cacheCoherenceFlags(other->_cacheCoherenceFlags),
+          privateFlags(other->privateFlags),
+          _time(other->_time),
+          _taskId(other->_taskId), _vaddr(other->_vaddr),
+          _extraData(other->_extraData), _contextId(other->_contextId),
+          _pc(other->_pc), _reqInstSeqNum(other->_reqInstSeqNum),
+          _localAccessor(other->_localAccessor),
+          translateDelta(other->translateDelta),
+          accessDelta(other->accessDelta), depth(other->depth)
+    {
+        atomicOpFunctor.reset(other->atomicOpFunctor ?
+                                (other->atomicOpFunctor)->clone() : nullptr);
+    }*/
+
 
     ~Request() {}
+    /* SSP request check*/
+    uint8_t get_is_ssp_request(){
+        return is_ssp_request;
+    }
+    void set_is_ssp_request(uint8_t value){
+        is_ssp_request = value;
+    }
+
+    void set_P1addr(Addr p1){
+        _p1 = p1;
+    }
+
+    Addr get_P1addr(){
+        return _p1;
+    }
+
+
 
     /**
      * Set up Context numbers.
@@ -789,6 +835,14 @@ class Request
         return _requestorId;
     }
 
+    void
+    setrequestorId(RequestorID id)
+    {
+        _requestorId = id;
+    }
+
+
+
     uint32_t
     taskId() const
     {
@@ -909,7 +963,8 @@ class Request
      * Set/Get the time taken to complete this request's access, not including
      *  the time to successfully translate the request.
      */
-    void setAccessLatency() { accessDelta = curTick() - _time - translateDelta; }
+    void setAccessLatency() {
+            accessDelta = curTick() - _time - translateDelta; }
     Tick getAccessLatency() const { return accessDelta; }
 
     /**

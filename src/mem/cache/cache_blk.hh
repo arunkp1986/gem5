@@ -281,11 +281,11 @@ class CacheBlk : public TaggedEntry
         whenReady = tick;
     }
 
-    void new_setWhenReady(const Tick tick)
+    /*void new_setWhenReady(const Tick tick)
     {
         //assert(tick >= _tickInserted);
         whenReady = tick;
-    }
+    }*/
 
 
     /** Get the task id associated to this block. */

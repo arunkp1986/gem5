@@ -41,37 +41,14 @@
 #ifndef __CPU_SIMPLE_TIMING_HH__
 #define __CPU_SIMPLE_TIMING_HH__
 
-#include <atomic>
-#include <list>
-
 #include "arch/generic/mmu.hh"
-#include "base/statistics.hh"
 #include "cpu/simple/base.hh"
 #include "cpu/simple/exec_context.hh"
 #include "cpu/translation.hh"
 #include "params/TimingSimpleCPU.hh"
 
-/*
- * LOOKUP_SIZE size of dirty bitmap lookup table.
- * HIGH_WATERMARK number of bits set to initiate dirty bitmap write.
- * LOW_WATERMARK minimum number of bits set in
- * the evicted bitmap lookup table entries.
- * the logic for LOW_WATERMARK is that, prefer
- * to keep entries with more dirty bits
- * set so evict entries with dirty bits <= LOW_WATERMARK
- *
- * */
-#define LOOKUP_SIZE 16
-#define HIGH_WATERMARK 24
-#define LOW_WATERMARK 8
 namespace gem5
 {
-
-struct log_entry
-{
-   Addr addr;
-   uint32_t size;
-};
 
 class TimingSimpleCPU : public BaseSimpleCPU
 {
@@ -257,7 +234,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
         virtual void recvFunctionalSnoop(PacketPtr pkt);
 
         virtual bool recvTimingResp(PacketPtr pkt);
-        void create_comparator_write(PacketPtr pkt, uint16_t isdone);
+
         virtual void recvReqRetry();
 
         virtual bool isSnooping() const {
@@ -273,6 +250,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
         };
 
         DTickEvent tickEvent;
+
     };
 
     void updateCycleCounts();
@@ -282,12 +260,6 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     PacketPtr ifetch_pkt;
     PacketPtr dcache_pkt;
-    PacketPtr dcache_tracker_pkt;
-    uint16_t num_dirty_packets;
-    uint16_t dirty_tracking_done;
-    Addr bitmap_address;
-    uint8_t flag;
-    std::atomic<std::uint8_t> bitset_pending;
 
     Cycles previousCycle;
 
@@ -298,26 +270,6 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     /** Return a reference to the instruction port. */
     Port &getInstPort() override { return icachePort; }
-
-    struct StatGroup : public statistics::Group
-    {
-        StatGroup(statistics::Group *parent);
-        /** Count the number of bitmap stores. */
-        statistics::Scalar bitmapStores;
-        /** Count the number of lookup full events. */
-        statistics::Scalar lookupFull;
-        /** Count the number of evict stores. */
-        statistics::Scalar evictStores;
-        /** Count the number of redundant store. */
-        statistics::Scalar redundantStores;
-        /** Count the number of high watermatk store. */
-        statistics::Scalar watermarkStores;
-        /* count of demand stack stores*/
-        statistics::Scalar stackStores;
-        /* Count of flush stores*/
-        statistics::Scalar flushStores;
-
-    }prosperstats;
 
   public:
 
@@ -342,21 +294,6 @@ class TimingSimpleCPU : public BaseSimpleCPU
                    const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
-    struct item
-    {
-        Addr addr;
-        unsigned size;
-     };
-
-    std::list<PacketPtr> comparator_list;// Added By Arun KP
-    std::unordered_map<Addr,std::pair<std::atomic<std::uint8_t>,uint32_t>>\
-            dirty_lookup; //Added by Arun KP
-    std::unordered_map<Addr,PacketPtr> dirty_packet; //Added by Arun KP
-    std::unordered_map<Addr,uint8_t> dirty_count; //Added by Arun KP
-    std::list<PacketPtr> read_list; //Added by Arun KP
-    void comparator();
-    void comparator_flush();
-    void comparator_selective_flush();
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
                          AtomicOpFunctorPtr amo_op) override;
 
@@ -392,7 +329,6 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
                             HtmFailureFaultCause) override;
-
 
   private:
 

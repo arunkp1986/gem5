@@ -40,11 +40,10 @@
  * Implementation of a snoop filter.
  */
 
-#include "mem/snoop_filter.hh"
-
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/SnoopFilter.hh"
+#include "mem/snoop_filter.hh"
 #include "sim/system.hh"
 
 namespace gem5
@@ -140,6 +139,10 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const ResponsePort&
         }
     } else { // if (!cpkt->needsResponse())
         assert(cpkt->isEviction());
+        // Added by Arun KP
+        if ((sf_item.holder & req_port).none()){
+             sf_item.holder |= req_port;
+        }
         // make sure that the sender actually had the line
         panic_if((sf_item.holder & req_port).none(), "requestor %x is not a " \
                  "holder :( SF value %x.%x\n", req_port,
@@ -153,7 +156,8 @@ SnoopFilter::lookupRequest(const Packet* cpkt, const ResponsePort&
         }
     }
 
-    return snoopSelected(maskToPortList(interested & ~req_port), lookupLatency);
+    return snoopSelected(maskToPortList(interested & ~req_port),
+                    lookupLatency);
 }
 
 void
@@ -364,7 +368,11 @@ SnoopFilter::updateResponse(const Packet* cpkt, const ResponsePort&
 
     DPRINTF(SnoopFilter, "%s:   old SF value %x.%x\n",
             __func__,  sf_item.requested, sf_item.holder);
-
+    //Added By KP Arun
+    if (((sf_item.requested & response_mask).none()) && cpkt->getSSP()){
+        //std::cout<<"tracker packet"<<std::endl;
+        sf_item.requested |= response_mask;
+    }
     // Make sure we have seen the actual request, too
     panic_if((sf_item.requested & response_mask).none(),
              "SF value %x.%x missing request bit\n",

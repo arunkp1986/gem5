@@ -365,6 +365,7 @@ class Packet : public Printable
     /// A pointer to the original request.
     RequestPtr req;
 
+
   private:
    /**
     * A pointer to the data being transferred. It can be different
@@ -393,6 +394,9 @@ class Packet : public Printable
     // Quality of Service priority value
     uint8_t _qosValue;
 
+
+    uint32_t dirtybit_pos;
+
     // hardware transactional memory
 
     /**
@@ -408,8 +412,10 @@ class Packet : public Printable
      */
     uint64_t htmTransactionUid;
 
+
   public:
 
+    uint8_t tracker_pkt;
     /**
      * The extra delay from seeing the packet until the header is
      * transmitted. This delay is used to communicate the crossbar
@@ -742,7 +748,8 @@ class Packet : public Printable
     bool satisfied() const { return flags.isSet(SATISFIED); }
 
     void setSuppressFuncError()     { flags.set(SUPPRESS_FUNC_ERROR); }
-    bool suppressFuncError() const  { return flags.isSet(SUPPRESS_FUNC_ERROR); }
+    bool suppressFuncError() const  {
+            return flags.isSet(SUPPRESS_FUNC_ERROR); }
     void setBlockCached()          { flags.set(BLOCK_CACHED); }
     bool isBlockCached() const     { return flags.isSet(BLOCK_CACHED); }
     void clearBlockCached()        { flags.clear(BLOCK_CACHED); }
@@ -779,6 +786,11 @@ class Packet : public Printable
     void copyError(Packet *pkt) { assert(pkt->isError()); cmd = pkt->cmd; }
 
     Addr getAddr() const { assert(flags.isSet(VALID_ADDR)); return addr; }
+
+    void setSSP(uint8_t value) { tracker_pkt = value; }
+    void setDirtybitPos(uint32_t value) { dirtybit_pos = value; }
+    uint8_t getSSP() const { return tracker_pkt; }
+    uint32_t getDirtybitPos() const { return dirtybit_pos; }
     /**
      * Update the address of this packet mid-transaction. This is used
      * by the address mapper to change an already set address to a new
@@ -851,9 +863,9 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd)
         :  cmd(_cmd), id((PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false), size(0),
-           _qosValue(0),
+           _qosValue(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0),tracker_pkt(0),
            headerDelay(0), snoopDelay(0),
            payloadDelay(0), senderState(NULL)
     {
@@ -892,9 +904,9 @@ class Packet : public Printable
     Packet(const RequestPtr &_req, MemCmd _cmd, int _blkSize, PacketId _id = 0)
         :  cmd(_cmd), id(_id ? _id : (PacketId)_req.get()), req(_req),
            data(nullptr), addr(0), _isSecure(false),
-           _qosValue(0),
+           _qosValue(0),dirtybit_pos(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0),tracker_pkt(0),
            headerDelay(0),
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
@@ -921,8 +933,9 @@ class Packet : public Printable
            addr(pkt->addr), _isSecure(pkt->_isSecure), size(pkt->size),
            bytesValid(pkt->bytesValid),
            _qosValue(pkt->qosValue()),
+           dirtybit_pos(pkt->dirtybit_pos),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0),tracker_pkt(pkt->tracker_pkt),
            headerDelay(pkt->headerDelay),
            snoopDelay(0),
            payloadDelay(pkt->payloadDelay),
@@ -1064,9 +1077,26 @@ class Packet : public Printable
     }
 
     void
-    setSize(unsigned size)
+    setTSize(unsigned size)
     {
-        assert(!flags.isSet(VALID_SIZE));
+        this->size = size;
+        flags.set(VALID_SIZE);
+        if (this->data)
+            delete this->data;
+        this->data = new uint8_t[getSize()];
+        //flags.set(STATIC_DATA);
+    }
+
+    void
+    setTcmd(MemCmd _cmd)
+    {
+        this->cmd = _cmd;
+    }
+
+
+    void
+    setSize(unsigned size)
+    {   assert(!flags.isSet(VALID_SIZE));
 
         this->size = size;
         flags.set(VALID_SIZE);
@@ -1262,6 +1292,44 @@ class Packet : public Printable
             std::memcpy(getPtr<uint8_t>(), p, getSize());
         }
     }
+    /**
+     * Copy data into the packet from the provided packet.
+     */
+    void
+    setTData(const PacketPtr pkt)
+    {
+        if (pkt->data){
+            std::memcpy(getPtr<uint8_t>(), pkt->data, getSize());
+        }
+        /*
+        // we should never be copying data onto itself, which means we
+        // must idenfity packets with static data, as they carry the
+        // same pointer from source to destination and back
+        assert(p != getPtr<uint8_t>() || flags.isSet(STATIC_DATA));
+
+        if (p != getPtr<uint8_t>()) {
+            // for packet with allocated dynamic data, we copy data from
+            // one to the other, e.g. a forwarded response to a response
+            std::memcpy(getPtr<uint8_t>(), p, getSize());
+        }*/
+    }
+
+
+    void
+    getData(uint8_t *p)
+    {
+        // we should never be copying data onto itself, which means we
+        // must idenfity packets with static data, as they carry the
+        // same pointer from source to destination and back
+        //assert(p != getPtr<uint8_t>() || flags.isSet(STATIC_DATA));
+
+        if (p != getPtr<uint8_t>()) {
+            // for packet with allocated dynamic data, we copy data from
+            // one to the other, e.g. a forwarded response to a response
+            std::memcpy(p,getPtr<uint8_t>(),getSize());
+        }
+    }
+
 
     /**
      * Copy data into the packet from the provided block pointer,
@@ -1320,6 +1388,7 @@ class Packet : public Printable
         flags.clear(STATIC_DATA|DYNAMIC_DATA);
         data = NULL;
     }
+
 
     /** Allocate memory for the packet. */
     void
