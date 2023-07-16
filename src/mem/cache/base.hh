@@ -1231,10 +1231,10 @@ class BaseCache : public ClockedObject
         if (wq_entry && !wq_entry->inService) {
             DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
         }
-        if (wq_entry && pkt->getTracker()){
+        /*if (wq_entry && pkt->getTracker()){
             //std::cout<<"got tracker packet in
             //allocateWriteBuffer"<<std::endl;
-        }
+        }*/
 
         writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);
 

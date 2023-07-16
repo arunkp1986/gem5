@@ -281,8 +281,8 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
             assert(!pkt->isWriteback());
             // CleanEvicts corresponding to blocks which have
             // outstanding requests in MSHRs are simply sunk here
-            assert(!(pkt->isWrite() && getisBypassDirty() &&\
-                                   pkt->getTracker()));
+            /*assert(!(pkt->isWrite() && getisBypassDirty() &&\
+                                   pkt->getTracker()));*/
             if (pkt->cmd == MemCmd::CleanEvict) {
                 pendingDelete.reset(pkt);
             } else if (pkt->cmd == MemCmd::WriteClean ) {
@@ -458,11 +458,11 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     /*Added by KP Arun
      *We will see a write response incase of comparator
      */
-    if (pkt->isWrite() && pkt->getTracker() && getisBypassDirty()){
+    /*if (pkt->isWrite() && pkt->getTracker() && getisBypassDirty()){
         //std::cout<<"got tracker write response"<<std::endl;
         handleUncacheableWriteResp(pkt);
         return;
-    }
+    }*/
 
     // if this is a write, we should be looking at an uncacheable
     // write
@@ -517,11 +517,12 @@ BaseCache::recvTimingResp(PacketPtr pkt)
         // Added by KP Arun
         // This ensures that read response for comparator at
         // bypassed cache level is not filled into cache.
-        if (pkt->getTracker() && getisBypassDirty()){
+        /*if (pkt->getTracker() && getisBypassDirty()){
             blk = handleFill(pkt, blk, writebacks, 0);
         }else{
             blk = handleFill(pkt, blk, writebacks, allocate);
-        }
+        }*/
+        blk = handleFill(pkt, blk, writebacks, allocate);
         assert(blk != nullptr);
         ppFill->notify(pkt);
     }
@@ -1097,14 +1098,14 @@ BaseCache::satisfyRequest(PacketPtr pkt, CacheBlk *blk, bool, bool)
         // note that the line may be also be considered writable in
         // downstream caches along the path to memory, but always
         // Exclusive, and never Modified
-        if (!blk->isSet(CacheBlk::WritableBit)){
+        /*if (!blk->isSet(CacheBlk::WritableBit)){
             if (pkt->getTracker())
                 std::cout<<"tracker pkt"<<std::endl;
             else
                 std::cout<<"not tracker pkt"<<std::endl;
 
             std::cout<<"Address: "<<std::hex<<pkt->getAddr()<<std::endl;
-        }
+        }*/
         assert(blk->isSet(CacheBlk::WritableBit));
         // Write or WriteLine at the first cache with block in writable state
         if (blk->checkWrite(pkt)) {

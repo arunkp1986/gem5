@@ -1367,9 +1367,9 @@ Cache::sendMSHRQueuePacket(MSHR* mshr)
 
     // use request from 1st target
     PacketPtr tgt_pkt = mshr->getTarget()->pkt;
-    if (!tgt_pkt->needsResponse()){
+    /*if (!tgt_pkt->needsResponse()){
         std::cout<<this->name()<<std::endl;
-    }
+    }*/
 
     if (tgt_pkt->cmd == MemCmd::HardPFReq && forwardSnoops) {
         DPRINTF(Cache, "%s: MSHR %s\n", __func__, tgt_pkt->print());
