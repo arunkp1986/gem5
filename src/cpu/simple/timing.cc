@@ -1079,6 +1079,15 @@ void
 TimingSimpleCPU::updateCycleCounts()
 {
     const Cycles delta(curCycle() - previousCycle);
+    SimpleExecContext& t_info = *threadInfo[curThread];
+    SimpleThread* thread = t_info.thread;
+    ThreadContext *tc = thread->getTC();
+    uint8_t usermode = tc->readMiscRegNoEffect(\
+                    gem5::X86ISA::MISCREG_TRACK_USER);
+    if (usermode){
+        //captures cycles spend in usermode
+        baseStats.numUsrCycles += delta;
+    }
 
     baseStats.numCycles += delta;
 
