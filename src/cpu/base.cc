@@ -616,6 +616,16 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
 }
 
 void
+BaseCPU::updateCounter(Addr paddr)
+{
+    for (ThreadID i = 0; i < threadContexts.size(); ++i) {
+        ThreadContext &tc(*threadContexts[i]);
+        tc.getMMUPtr()->updateCounter(paddr);
+    }
+}
+
+
+void
 BaseCPU::flushTLBs()
 {
     for (ThreadID i = 0; i < threadContexts.size(); ++i) {

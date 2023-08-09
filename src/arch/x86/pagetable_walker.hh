@@ -106,6 +106,7 @@ namespace X86ISA
             unsigned inflight;
             TlbEntry entry;
             PacketPtr read;
+            Addr pte_address; //HSCC data item
             std::vector<PacketPtr> writes;
             Fault timingFault;
             BaseMMU::Translation * translation;
@@ -161,6 +162,11 @@ namespace X86ISA
         };
 
       public:
+        bool retryingbitmap;
+        bool isRetryingbitmap();
+        uint32_t hscc_packet_send;
+        uint32_t hscc_packet_received;
+        std::vector<PacketPtr> writesbitmap;
         // Kick off the state machine.
         Fault start(ThreadContext * _tc, BaseMMU::Translation *translation,
                 const RequestPtr &req, BaseMMU::Mode mode);
@@ -168,6 +174,17 @@ namespace X86ISA
                 unsigned &logBytes, BaseMMU::Mode mode);
         Port &getPort(const std::string &if_name,
                       PortID idx=InvalidPortID) override;
+        bool sendTimingbitmap(PacketPtr pkt){
+            if (!port.sendTimingReq(pkt)){
+                writesbitmap.push_back(pkt);
+                retryingbitmap = true;
+                return false;
+            }
+            else{
+                hscc_packet_send += 1;
+            }
+            return true;
+        }
 
       protected:
         // The TLB we're supposed to load.
@@ -192,7 +209,9 @@ namespace X86ISA
         bool sendTiming(WalkerState * sendingState, PacketPtr pkt);
 
       public:
-
+        RequestorID getrequestorId(){
+            return requestorId;
+        }
         void setTLB(TLB * _tlb)
         {
             tlb = _tlb;
@@ -202,7 +221,8 @@ namespace X86ISA
 
         Walker(const Params &params) :
             ClockedObject(params), port(name() + ".port", this),
-            funcState(this, NULL, NULL, true), tlb(NULL), sys(params.system),
+            funcState(this, NULL, NULL, true), hscc_packet_send(0),
+            hscc_packet_received(0), tlb(NULL), sys(params.system),
             requestorId(sys->getRequestorId(this)),
             numSquashable(params.num_squash_per_cycle),
             startWalkWrapperEvent([this]{ startWalkWrapper(); }, name())

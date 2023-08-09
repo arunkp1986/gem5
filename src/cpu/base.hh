@@ -342,6 +342,9 @@ class BaseCPU : public ClockedObject
      * @param cpu CPU to initialize read state from.
      */
     virtual void takeOverFrom(BaseCPU *cpu);
+    //HSCC update
+
+    void updateCounter(Addr paddr);
 
     /**
      * Flush all TLBs in the CPU.

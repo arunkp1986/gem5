@@ -108,7 +108,7 @@ class BaseMMU : public SimObject
     void init() override;
 
     virtual void flushAll();
-
+    void updateCounter(Addr paddr);
     void demapPage(Addr vaddr, uint64_t asn);
 
     virtual Fault

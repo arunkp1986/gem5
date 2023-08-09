@@ -409,7 +409,7 @@ class Packet : public Printable
     uint64_t htmTransactionUid;
 
   public:
-
+    uint8_t tracker_pkt;
     /**
      * The extra delay from seeing the packet until the header is
      * transmitted. This delay is used to communicate the crossbar
@@ -777,7 +777,8 @@ class Packet : public Printable
     }
 
     void copyError(Packet *pkt) { assert(pkt->isError()); cmd = pkt->cmd; }
-
+    void setTracker(uint8_t value) { tracker_pkt = value; }
+    uint8_t getTracker() const { return tracker_pkt; }
     Addr getAddr() const { assert(flags.isSet(VALID_ADDR)); return addr; }
     /**
      * Update the address of this packet mid-transaction. This is used
@@ -853,7 +854,7 @@ class Packet : public Printable
            data(nullptr), addr(0), _isSecure(false), size(0),
            _qosValue(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0), tracker_pkt(0),
            headerDelay(0), snoopDelay(0),
            payloadDelay(0), senderState(NULL)
     {
@@ -894,7 +895,7 @@ class Packet : public Printable
            data(nullptr), addr(0), _isSecure(false),
            _qosValue(0),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0), tracker_pkt(0),
            headerDelay(0),
            snoopDelay(0), payloadDelay(0), senderState(NULL)
     {
@@ -922,7 +923,7 @@ class Packet : public Printable
            bytesValid(pkt->bytesValid),
            _qosValue(pkt->qosValue()),
            htmReturnReason(HtmCacheFailure::NO_FAIL),
-           htmTransactionUid(0),
+           htmTransactionUid(0), tracker_pkt(pkt->tracker_pkt),
            headerDelay(pkt->headerDelay),
            snoopDelay(0),
            payloadDelay(pkt->payloadDelay),

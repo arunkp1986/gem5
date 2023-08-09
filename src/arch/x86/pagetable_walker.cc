@@ -103,6 +103,11 @@ Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
 bool
 Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
+    if (pkt->getTracker()){
+       walker->hscc_packet_received += 1;
+       delete pkt;
+       return true;
+    }
     return walker->recvTimingResp(pkt);
 }
 
@@ -143,6 +148,22 @@ Walker::WalkerPort::recvReqRetry()
 void
 Walker::recvReqRetry()
 {
+   /*if (retryingbitmap){
+        while (writesbitmap.size()) {
+            //std::cout<<"bitmap write retry"<<std::endl;
+            PacketPtr write = writesbitmap.back();
+            writesbitmap.pop_back();
+            if (!port.sendTimingReq(write)){
+                retryingbitmap = true;
+                writesbitmap.push_back(write);
+                break;
+            }
+            else{
+                hscc_packet_send += 1;
+            }
+            retryingbitmap = false;
+        }
+    }*/
     std::list<WalkerState *>::iterator iter;
     for (iter = currStates.begin(); iter != currStates.end(); iter++) {
         WalkerState * walkerState = *(iter);
@@ -165,7 +186,6 @@ bool Walker::sendTiming(WalkerState* sendingState, PacketPtr pkt)
         delete walker_state;
         return false;
     }
-
 }
 
 Port &
@@ -345,6 +365,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             entry.logBytes = 12;
             nextRead =
                 ((uint64_t)pte & (mask(40) << 12)) + vaddr.longl1 * dataSize;
+            pte_address = nextRead;
             nextState = LongPTE;
             break;
         } else {
@@ -378,6 +399,11 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             break;
         }
         entry.paddr = (uint64_t)pte & (mask(40) << 12);
+        entry.access_count = (((uint64_t)pte & (mask(8) << 52))>>52);
+        entry.pte_val = (uint64_t)pte;
+        //std::cout<<"access: "<<entry.access_count<<std::endl;
+        entry.pte_addr = pte_address;
+        entry.is_count_send = 0;
         entry.uncacheable = uncacheable;
         entry.global = pte.g;
         entry.patBit = bits(pte, 12);
@@ -533,6 +559,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         endWalk();
     } else {
         PacketPtr oldRead = read;
+        //std::cout<<"size: "<<oldRead->getSize()<<std::endl;
         //If we didn't return, we're setting up another read.
         Request::Flags flags = oldRead->req->getFlags();
         flags.set(Request::UNCACHEABLE, uncacheable);

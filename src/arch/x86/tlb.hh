@@ -90,6 +90,8 @@ namespace X86ISA
 
         void flushNonGlobal();
 
+        void incCounter(Addr paddr) override; //HSCC implementation
+
         void demapPage(Addr va, uint64_t asn) override;
 
       protected:

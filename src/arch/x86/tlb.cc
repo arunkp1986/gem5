@@ -57,6 +57,9 @@
 #include "sim/process.hh"
 #include "sim/pseudo_inst.hh"
 
+#define NVM_USER_REG_START 0x120001000
+#define MIGRATION_THRESHOLD 5
+
 namespace gem5
 {
 
@@ -93,6 +96,28 @@ TLB::evictLRU()
     assert(tlb[lru].trieHandle);
     trie.remove(tlb[lru].trieHandle);
     tlb[lru].trieHandle = NULL;
+    //std::cout<<"pte evictLRU: "<<std::hex<<tlb[lru].pte_addr<<std::endl;
+    //std::cout<<"count evictLRU: "<<tlb[lru].access_count<<std::endl;
+    if (tlb[lru].paddr >= NVM_USER_REG_START){
+        Request::Flags flags = Request::PHYSICAL;
+        RequestPtr request = std::make_shared<Request>(
+                        tlb[lru].pte_addr, 8, flags,walker->getrequestorId());
+        PacketPtr write = new Packet(request, MemCmd::WriteReq);
+        write->allocate();
+        //uint8_t data[8];
+        //uint64_t value = tlb[lru].pte_val;
+        uint64_t value = tlb[lru].pte_val|(((uint64_t)tlb[lru].access_count)
+                        <<52);
+        //std::cout<<"pte val: "<<std::hex<<tlb[lru].pte_val<<std::endl;
+        //std::cout<<"pte: "<<std::hex<<value<<std::endl;
+        //memcpy(data,&value,8);
+        //write->setLE<uint64_t>(value);
+        write->setData((uint8_t*)&(value));
+        //write->setData(data);
+        write->setTracker(1);
+        walker->sendTimingbitmap(write);
+        //std::cout<<"evictLRU: "<<std::endl;
+    }
     freeList.push_back(&tlb[lru]);
 }
 
@@ -130,11 +155,38 @@ TLB::lookup(Addr va, bool update_lru)
 }
 
 void
+TLB::incCounter(Addr paddr){
+    //std::cout<<"inc counter called"<<std::hex<<paddr<<std::endl;
+    Addr paddr1;
+    for (unsigned i = 0; i < size; i++) {
+        paddr1 = tlb[i].pageStart();
+        if (paddr1 == (paddr&~(0xfff))){
+            //std::cout<<"paddr: "<<std::hex<<paddr<<std::endl;
+            //std::cout<<"count: "<<tlb[i].get_access_count()<<std::endl;
+            tlb[i].incaccess();
+        }
+    }
+}
+
+void
 TLB::flushAll()
 {
     DPRINTF(TLB, "Invalidating all entries.\n");
     for (unsigned i = 0; i < size; i++) {
         if (tlb[i].trieHandle) {
+            if (tlb[i].paddr >= NVM_USER_REG_START){
+                Request::Flags flags = Request::PHYSICAL;
+                RequestPtr request = std::make_shared<Request>(
+                                tlb[i].pte_addr, 8, flags,
+                                walker->getrequestorId());
+                PacketPtr write = new Packet(request, MemCmd::WriteReq);
+                write->allocate();
+                uint64_t value = tlb[i].pte_val|
+                        (((uint64_t)tlb[i].access_count)<<52);
+                write->setData((uint8_t*)&(value));
+                write->setTracker(1);
+                walker->sendTimingbitmap(write);
+            }
             trie.remove(tlb[i].trieHandle);
             tlb[i].trieHandle = NULL;
             freeList.push_back(&tlb[i]);
@@ -154,6 +206,19 @@ TLB::flushNonGlobal()
     DPRINTF(TLB, "Invalidating all non global entries.\n");
     for (unsigned i = 0; i < size; i++) {
         if (tlb[i].trieHandle && !tlb[i].global) {
+            if (tlb[i].paddr >= NVM_USER_REG_START){
+                Request::Flags flags = Request::PHYSICAL;
+                RequestPtr request = std::make_shared<Request>(
+                                tlb[i].pte_addr, 8,
+                                flags,walker->getrequestorId());
+                PacketPtr write = new Packet(request, MemCmd::WriteReq);
+                write->allocate();
+                uint64_t value = tlb[i].pte_val|
+                        (((uint64_t)tlb[i].access_count)<<52);
+                write->setData((uint8_t*)&(value));
+                write->setTracker(1);
+                walker->sendTimingbitmap(write);
+            }
             trie.remove(tlb[i].trieHandle);
             tlb[i].trieHandle = NULL;
             freeList.push_back(&tlb[i]);
@@ -166,6 +231,19 @@ TLB::demapPage(Addr va, uint64_t asn)
 {
     TlbEntry *entry = trie.lookup(va);
     if (entry) {
+        if (entry->paddr >= NVM_USER_REG_START){
+            Request::Flags flags = Request::PHYSICAL;
+            RequestPtr request = std::make_shared<Request>(
+                            entry->pte_addr, 8, flags,
+                            walker->getrequestorId());
+            PacketPtr write = new Packet(request, MemCmd::WriteReq);
+            write->allocate();
+            uint64_t value = entry->pte_val|
+                    (((uint64_t)(entry->access_count))<<52);
+            write->setData((uint8_t*)&(value));
+            write->setTracker(1);
+            walker->sendTimingbitmap(write);
+        }
         trie.remove(entry->trieHandle);
         entry->trieHandle = NULL;
         freeList.push_back(entry);
@@ -443,6 +521,26 @@ TLB::translate(const RequestPtr &req,
             Addr paddr = entry->paddr | (vaddr & mask(entry->logBytes));
             DPRINTF(TLB, "Translated %#x -> %#x.\n", vaddr, paddr);
             req->setPaddr(paddr);
+            if (paddr >= NVM_USER_REG_START){
+                //std::cout<<"paddr: "<<std::hex<<paddr<<std::endl;
+                req->set_is_nvm(1);
+                if (entry->access_count >= MIGRATION_THRESHOLD
+                                && !entry->is_count_send){
+                    //std::cout<<"tlb count"<<entry->access_count<<std::endl;
+                    entry->is_count_send = 1;
+                    Request::Flags flags = Request::PHYSICAL;
+                    RequestPtr request = std::make_shared<Request>(
+                                    entry->pte_addr,
+                                    8, flags,walker->getrequestorId());
+                    PacketPtr write = new Packet(request, MemCmd::WriteReq);
+                    write->allocate();
+                    uint64_t value = entry->pte_val|
+                            (((uint64_t)(entry->access_count))<<52);
+                    write->setData((uint8_t*)&(value));
+                    write->setTracker(1);
+                    walker->sendTimingbitmap(write);
+                }
+            }
             if (entry->uncacheable)
                 req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
         } else {

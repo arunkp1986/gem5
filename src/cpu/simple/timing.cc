@@ -303,7 +303,6 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
 
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
-
     // hardware transactional memory
     // If the core is in transactional mode or if the request is HtmCMD
     // to abort a transaction, the packet should reflect that it is
@@ -947,7 +946,6 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     SimpleExecContext *t_info = threadInfo[curThread];
     [[maybe_unused]] const bool is_htm_speculative =
         t_info->inHtmTransactionalState();
-
     // received a response from the dcache: complete the load or store
     // instruction
     assert(!pkt->isError());
@@ -1120,7 +1118,10 @@ bool
 TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(SimpleCPU, "Received load/store response %#x\n", pkt->getAddr());
-
+    if (pkt->req->get_is_llc_miss()){
+        //std::cout<<"llc miss set"<<std::endl;
+        cpu->updateCounter(pkt->req->getPaddr());
+    }
     // The timing CPU is not really ticked, instead it relies on the
     // memory system (fetch and load/store) to set the pace.
     if (!tickEvent.scheduled()) {

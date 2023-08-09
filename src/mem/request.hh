@@ -324,7 +324,9 @@ class Request
 
     using LocalAccessor =
         std::function<Cycles(ThreadContext *tc, Packet *pkt)>;
-
+    //HSCC fields
+    uint8_t is_nvm = 0;
+    uint8_t is_llc_miss = 0;
   private:
     typedef uint16_t PrivateFlagsType;
     typedef gem5::Flags<PrivateFlagsType> PrivateFlags;
@@ -462,7 +464,8 @@ class Request
      * These fields are adequate to perform a request.
      */
     Request(Addr paddr, unsigned size, Flags flags, RequestorID id) :
-        _paddr(paddr), _size(size), _requestorId(id), _time(curTick())
+        is_nvm(0),_paddr(paddr), _size(size), _requestorId(id),
+        _time(curTick())
     {
         _flags.set(flags);
         privateFlags.set(VALID_PADDR|VALID_SIZE);
@@ -479,7 +482,7 @@ class Request
     }
 
     Request(const Request& other)
-        : _paddr(other._paddr), _size(other._size),
+        : is_nvm(other.is_nvm), _paddr(other._paddr), _size(other._size),
           _byteEnable(other._byteEnable),
           _requestorId(other._requestorId),
           _flags(other._flags),
@@ -515,7 +518,26 @@ class Request
         _streamId = sid;
         privateFlags.set(VALID_STREAM_ID);
     }
-
+    void
+    set_is_nvm(uint8_t val)
+    {
+        is_nvm = val;
+    }
+    uint8_t
+    get_is_nvm()
+    {
+        return is_nvm;
+    }
+    void
+    set_is_llc_miss(uint8_t val)
+    {
+        is_llc_miss = val;
+    }
+    uint8_t
+    get_is_llc_miss()
+    {
+        return is_llc_miss;
+    }
     void
     setSubstreamId(uint32_t ssid)
     {

@@ -76,6 +76,13 @@ BaseMMU::init()
     traverse_hierarchy(itb);
     traverse_hierarchy(dtb);
 }
+//HSCC implementation
+void
+BaseMMU::updateCounter(Addr paddr){
+    for (auto tlb : data) {
+        tlb->incCounter(paddr);
+    }
+}
 
 void
 BaseMMU::flushAll()

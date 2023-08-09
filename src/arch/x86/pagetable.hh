@@ -90,13 +90,27 @@ namespace X86ISA
         bool noExec;
         // A sequence number to keep track of LRU.
         uint64_t lruSeq;
+        //HSCC field
+        uint32_t access_count;
+        Addr pte_addr;
+        uint64_t pte_val;
+        uint8_t is_count_send;
 
         TlbEntryTrie::Handle trieHandle;
 
         TlbEntry(Addr asn, Addr _vaddr, Addr _paddr,
                  bool uncacheable, bool read_only);
         TlbEntry();
-
+        void
+        incaccess()
+        {
+            access_count += 1;
+        }
+        uint32_t
+        get_access_count()
+        {
+            return access_count;
+        }
         void
         updateVaddr(Addr new_vaddr)
         {
@@ -138,6 +152,7 @@ namespace X86ISA
     // point in the future.
     BitUnion64(PageTableEntry)
         Bitfield<63> nx;
+        Bitfield<59, 52> ign;
         Bitfield<51, 12> base;
         Bitfield<11, 9> avl;
         Bitfield<8> g;

@@ -99,6 +99,7 @@ class BaseTLB : public SimObject
             const RequestPtr &req, ThreadContext *tc,
             BaseMMU::Mode mode) const = 0;
 
+    virtual void incCounter(Addr paddr) = 0 ; //HSCC implementation
     /**
      * Remove all entries from the TLB
      */

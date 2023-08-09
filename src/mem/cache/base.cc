@@ -257,6 +257,10 @@ BaseCache::handleTimingReqMiss(PacketPtr pkt, MSHR *mshr, CacheBlk *blk,
         writeAllocator->updateMode(pkt->getAddr(), pkt->getSize(),
                                    pkt->getBlockAddr(blkSize));
     }
+    if (pkt->req->get_is_nvm() && (this->name() == "system.l3")){
+        //std::cout<<"miss "<<std::hex<<pkt->req->getPaddr()<<std::endl;
+        pkt->req->set_is_llc_miss(1);
+    }
 
     if (mshr) {
         /// MSHR hit
@@ -1156,7 +1160,10 @@ BaseCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
 {
     // sanity check
     assert(pkt->isRequest());
-
+   /*if (pkt->req->get_is_nvm() && (this->name() == "system.l3")){
+        //std::cout<<"nvm request "<<this->name()<<std::endl;
+        pkt->req->set_is_llc_miss(1);
+    }*/
     gem5_assert(!(isReadOnly && pkt->isWrite()),
                 "Should never see a write in a read-only cache %s\n",
                 name());
