@@ -272,8 +272,8 @@ if __name__ == "__m5_main__":
         print("Switching done")
 
     # reset stats
-    print("Reset stats")
-    m5.stats.reset()
+    #print("Reset stats")
+    #m5.stats.reset()
 
     # running benchmark
     print("Benchmark: {}; Size: {}".format(benchmark_name, benchmark_size))
