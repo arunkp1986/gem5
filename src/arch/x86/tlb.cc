@@ -42,6 +42,7 @@
 
 #include "arch/x86/faults.hh"
 #include "arch/x86/insts/microldstop.hh"
+#include "arch/x86/pagetable.hh"
 #include "arch/x86/pagetable_walker.hh"
 #include "arch/x86/pseudo_inst_abi.hh"
 #include "arch/x86/regs/misc.hh"
@@ -58,7 +59,8 @@
 #include "sim/pseudo_inst.hh"
 
 #define NVM_USER_REG_START 0x120001000
-#define MIGRATION_THRESHOLD 5
+#define REGION_NVM_ENDMEM 0x180000000
+//#define MIGRATION_THRESHOLD 5
 
 namespace gem5
 {
@@ -98,7 +100,7 @@ TLB::evictLRU()
     tlb[lru].trieHandle = NULL;
     //std::cout<<"pte evictLRU: "<<std::hex<<tlb[lru].pte_addr<<std::endl;
     //std::cout<<"count evictLRU: "<<tlb[lru].access_count<<std::endl;
-    if (tlb[lru].paddr >= NVM_USER_REG_START){
+    if (tlb[lru].paddr >= NVM_USER_REG_START && tlb[lru].access_count){
         Request::Flags flags = Request::PHYSICAL;
         RequestPtr request = std::make_shared<Request>(
                         tlb[lru].pte_addr, 8, flags,walker->getrequestorId());
@@ -106,13 +108,13 @@ TLB::evictLRU()
         write->allocate();
         //uint8_t data[8];
         //uint64_t value = tlb[lru].pte_val;
-        uint64_t value = tlb[lru].pte_val|(((uint64_t)tlb[lru].access_count)
-                        <<52);
-        //std::cout<<"pte val: "<<std::hex<<tlb[lru].pte_val<<std::endl;
-        //std::cout<<"pte: "<<std::hex<<value<<std::endl;
+        uint64_t value = tlb[lru].pte_val|(
+                        ((uint64_t)tlb[lru].access_count)<<52);
+
+        //uint64_t value = tlb[lru].pte_val|(((uint64_t)7)<<52);
         //memcpy(data,&value,8);
-        //write->setLE<uint64_t>(value);
-        write->setData((uint8_t*)&(value));
+        //write->setData((uint8_t*)&(value));
+        write->setLE<uint64_t>(value);
         //write->setData(data);
         write->setTracker(1);
         walker->sendTimingbitmap(write);
@@ -174,7 +176,7 @@ TLB::flushAll()
     DPRINTF(TLB, "Invalidating all entries.\n");
     for (unsigned i = 0; i < size; i++) {
         if (tlb[i].trieHandle) {
-            if (tlb[i].paddr >= NVM_USER_REG_START){
+            if (tlb[i].paddr >= NVM_USER_REG_START && tlb[i].access_count){
                 Request::Flags flags = Request::PHYSICAL;
                 RequestPtr request = std::make_shared<Request>(
                                 tlb[i].pte_addr, 8, flags,
@@ -206,7 +208,7 @@ TLB::flushNonGlobal()
     DPRINTF(TLB, "Invalidating all non global entries.\n");
     for (unsigned i = 0; i < size; i++) {
         if (tlb[i].trieHandle && !tlb[i].global) {
-            if (tlb[i].paddr >= NVM_USER_REG_START){
+            if (tlb[i].paddr >= NVM_USER_REG_START && tlb[i].access_count){
                 Request::Flags flags = Request::PHYSICAL;
                 RequestPtr request = std::make_shared<Request>(
                                 tlb[i].pte_addr, 8,
@@ -231,7 +233,7 @@ TLB::demapPage(Addr va, uint64_t asn)
 {
     TlbEntry *entry = trie.lookup(va);
     if (entry) {
-        if (entry->paddr >= NVM_USER_REG_START){
+        if (entry->paddr >= NVM_USER_REG_START && entry->access_count){
             Request::Flags flags = Request::PHYSICAL;
             RequestPtr request = std::make_shared<Request>(
                             entry->pte_addr, 8, flags,
@@ -521,12 +523,11 @@ TLB::translate(const RequestPtr &req,
             Addr paddr = entry->paddr | (vaddr & mask(entry->logBytes));
             DPRINTF(TLB, "Translated %#x -> %#x.\n", vaddr, paddr);
             req->setPaddr(paddr);
-            if (paddr >= NVM_USER_REG_START){
+            if ((paddr >= NVM_USER_REG_START) && (paddr < REGION_NVM_ENDMEM)){
                 //std::cout<<"paddr: "<<std::hex<<paddr<<std::endl;
                 req->set_is_nvm(1);
-                if (entry->access_count >= MIGRATION_THRESHOLD
-                                && !entry->is_count_send){
-                    //std::cout<<"tlb count"<<entry->access_count<<std::endl;
+                if (!entry->is_count_send &&
+                                entry->access_count >= MIGRATION_THRESHOLD){
                     entry->is_count_send = 1;
                     Request::Flags flags = Request::PHYSICAL;
                     RequestPtr request = std::make_shared<Request>(
@@ -537,6 +538,7 @@ TLB::translate(const RequestPtr &req,
                     uint64_t value = entry->pte_val|
                             (((uint64_t)(entry->access_count))<<52);
                     write->setData((uint8_t*)&(value));
+                    //write->setLE<uint64_t>(value);
                     write->setTracker(1);
                     walker->sendTimingbitmap(write);
                 }
@@ -614,6 +616,7 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
         translation->finish(fault, req, tc, mode);
     else
         translation->markDelayed();
+
 }
 
 Walker *

@@ -48,6 +48,8 @@
 #include "mem/port_proxy.hh"
 #include "sim/serialize.hh"
 
+#define MIGRATION_THRESHOLD 5
+
 namespace gem5
 {
 
@@ -91,7 +93,7 @@ namespace X86ISA
         // A sequence number to keep track of LRU.
         uint64_t lruSeq;
         //HSCC field
-        uint32_t access_count;
+        uint8_t access_count;
         Addr pte_addr;
         uint64_t pte_val;
         uint8_t is_count_send;
@@ -106,7 +108,7 @@ namespace X86ISA
         {
             access_count += 1;
         }
-        uint32_t
+        uint8_t
         get_access_count()
         {
             return access_count;

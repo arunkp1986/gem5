@@ -105,6 +105,7 @@ Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
     if (pkt->getTracker()){
        walker->hscc_packet_received += 1;
+       //std::cout<<"send: "<<(unsigned)walker->hscc_packet_send<<std::endl;
        delete pkt;
        return true;
     }
@@ -148,9 +149,9 @@ Walker::WalkerPort::recvReqRetry()
 void
 Walker::recvReqRetry()
 {
-   /*if (retryingbitmap){
+   if (retryingbitmap){
         while (writesbitmap.size()) {
-            //std::cout<<"bitmap write retry"<<std::endl;
+            std::cout<<"bitmap write retry"<<std::endl;
             PacketPtr write = writesbitmap.back();
             writesbitmap.pop_back();
             if (!port.sendTimingReq(write)){
@@ -163,7 +164,7 @@ Walker::recvReqRetry()
             }
             retryingbitmap = false;
         }
-    }*/
+    }
     std::list<WalkerState *>::iterator iter;
     for (iter = currStates.begin(); iter != currStates.end(); iter++) {
         WalkerState * walkerState = *(iter);
@@ -400,8 +401,9 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         }
         entry.paddr = (uint64_t)pte & (mask(40) << 12);
         entry.access_count = (((uint64_t)pte & (mask(8) << 52))>>52);
-        entry.pte_val = (uint64_t)pte;
-        //std::cout<<"access: "<<entry.access_count<<std::endl;
+        entry.pte_val = ((uint64_t)pte & ~(mask(8) << 52));
+        //entry.pte_val = (uint64_t)pte;
+        //std::cout<<"access: "<<(unsigned)entry.access_count<<std::endl;
         entry.pte_addr = pte_address;
         entry.is_count_send = 0;
         entry.uncacheable = uncacheable;

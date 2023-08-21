@@ -948,6 +948,9 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
         t_info->inHtmTransactionalState();
     // received a response from the dcache: complete the load or store
     // instruction
+    /*if (pkt->isError() && pkt->getTracker()){
+        std::cout<<"tracker pkt error"<<std::endl;
+    }*/
     assert(!pkt->isError());
     assert(_status == DcacheWaitResponse || _status == DTBWaitResponse ||
            pkt->req->getFlags().isSet(Request::NO_ACCESS));
