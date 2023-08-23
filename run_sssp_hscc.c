@@ -21,18 +21,18 @@ int main() {
        if (!pid2){
            printf("child\n");
            int out_fd = open("/home/kparun/hybrid_work/output/\
-                           gemOS/hscc/fifty/sssp/gemos.out",
+                           gemOS/hscc/nomigration/sssp/gemos.out",\
                            O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
            int err_fd = open("/home/kparun/hybrid_work/output/\
-                           gemOS/hscc/fifty/sssp/gemos.err",
+                           gemOS/hscc/nomigration/sssp/gemos.err",\
                            O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
            if (dup2(out_fd,STDOUT_FILENO)<0 || dup2(err_fd,STDERR_FILENO)<0){
               printf("dup failed\n");
               exit(0);
            }
-           strcpy(cmd,"port=$(cat sssp_hscc.out|\
-                   grep 'connections on port'| cut -f7 -d ' ');\
-                           ./run.except $port");
+           strcpy(cmd,"port=$(cat sssp_hscc.out|grep\
+                   'connections on port'| cut -f7 -d ' ');\
+                   ./run.except $port");
            system(cmd);
        }
        else{

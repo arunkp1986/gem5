@@ -20,21 +20,19 @@ int main() {
        int pid2 = fork();
        if (!pid2){
            printf("child\n");
-           int out_fd = open(
-              "/home/kparun/hybrid_work/output\
-              /gemOS/hscc/fifty/gapbs/gemos.out",
-                        O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
-           int err_fd = open(
-              "/home/kparun/hybrid_work/output\
-              /gemOS/hscc/fifty/gapbs/gemos.err",
-                         O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
+           int out_fd = open("/home/kparun/hybrid_work/output/\
+                           gemOS/hscc/nomigration/gapbs/gemos.out",\
+                           O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
+           int err_fd = open("/home/kparun/hybrid_work/output/\
+                           gemOS/hscc/nomigration/gapbs/gemos.err",\
+                           O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
            if (dup2(out_fd,STDOUT_FILENO)<0 || dup2(err_fd,STDERR_FILENO)<0){
               printf("dup failed\n");
               exit(0);
            }
            strcpy(cmd,"port=$(cat gapbs_hscc.out|grep\
                    'connections on port'|cut -f7 -d ' ');\
-                           ./run.except $port");
+                   ./run.except $port");
            system(cmd);
        }
        else{
