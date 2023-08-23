@@ -497,6 +497,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
                 //blk = temp_blk;
                 blk->new_setWhenReady(blk_ready);
                 memcpy(blk->data,temp_blk->data,blkSize);
+                invalidateBlock(temp_blk);
             }
         }
     }

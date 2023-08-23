@@ -118,9 +118,9 @@ TLB::setupSSP(Addr bitmap_address, const RequestPtr &req,
             struct ssp_entry* temp_entry = (struct ssp_entry*)(bitmap_address+
                             (ssp_offset*sizeof(struct ssp_entry)));
             Request::Flags flags = Request::PHYSICAL;
-            Addr read_address = (Addr)&(temp_entry->current_bitmap);
-            RequestPtr request = std::make_shared<Request>(read_address,
-                        sizeof(unsigned), flags, walker->getrequestorId());
+            Addr write_address = (Addr)&(temp_entry->current_bitmap);
+            RequestPtr request = std::make_shared<Request>(write_address,
+                        8, flags, walker->getrequestorId());
             PacketPtr write = new Packet(request, MemCmd::WriteReq);
             write->allocate();
             write->setData((uint8_t*)&entry->current_bitmap);
@@ -557,18 +557,6 @@ TLB::translate(const RequestPtr &req,
 
     Addr vaddr = req->getVaddr();
     DPRINTF(TLB, "Translating vaddr %#x.\n", vaddr);
-    /*if (tracking_log_gran == 1 &&
-                    (bitmap_address <= vaddr &&
-                    vaddr<(bitmap_address+64)) && !ssp_flag_start){
-        ssp_flag_start = 1;
-        ssp_flag_end = 0;
-        std::cout<<"resetting updated bitmap at start"<<std::endl;
-        for (int i = 1; i < size; i++){
-            if (tlb[i].updated_bitmap > 0){
-                tlb[i].updated_bitmap = 0;
-            }
-        }
-    } */
     if (tracking_log_gran == 0 &&
                     (bitmap_address <= vaddr &&
                     vaddr<(bitmap_address+64)) && !ssp_flag_end){
@@ -582,15 +570,6 @@ TLB::translate(const RequestPtr &req,
                                 bitmap_address+
                             (ssp_offset*sizeof(struct ssp_entry)));
                 Request::Flags flags = Request::PHYSICAL;
-                //unsigned evicted = 3;
-                /*Addr read_address = (Addr)&(temp_entry->evicted);
-                RequestPtr request1 = std::make_shared<Request>(read_address,
-                        sizeof(unsigned), flags, walker->getrequestorId());
-                PacketPtr read = new Packet(request1, MemCmd::ReadReq);
-                read->allocate();
-                //read->setData((uint8_t*)&evicted);
-                read->setSSP(1);
-                walker->sendTimingbitmap(read);*/
                 if (tlb[i].updated_bitmap > 0){
                 Addr write_address = (Addr)&(temp_entry->updated_bitmap);
                 RequestPtr request2 = std::make_shared<Request>(

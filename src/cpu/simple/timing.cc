@@ -668,9 +668,6 @@ TimingSimpleCPU::handleWritePacket()
     SimpleThread* thread = t_info.thread;
 
     const RequestPtr &req = dcache_pkt->req;
-    //if (req->getVaddr() == (Addr)0x7FFFFFFA4){
-      // DPRINTF(Stackp, "handleWrite req vaddr:%x\n", req->getVaddr());
-    // }
 
     if (req->isLocalAccess()) {
         Cycles delay = req->localAccessor(thread->getTC(), dcache_pkt);
@@ -1183,9 +1180,9 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
     // received a response from the icache: execute the received
     // instruction
     assert(!pkt || !pkt->isError());
-    if (!(_status == IcacheWaitResponse)){
+    /*if (!(_status == IcacheWaitResponse)){
         std::cout<<"bug"<<std::endl;
-    }
+    }*/
     assert(_status == IcacheWaitResponse);
 
     _status = BaseSimpleCPU::Running;
@@ -1441,7 +1438,7 @@ void
 TimingSimpleCPU::updateCycleCounts()
 {
     const Cycles delta(curCycle() - previousCycle);
-    SimpleExecContext& t_info = *threadInfo[curThread];
+    /*SimpleExecContext& t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
     ThreadContext *tc = thread->getTC();
     uint8_t usermode = tc->readMiscRegNoEffect(\
@@ -1449,7 +1446,7 @@ TimingSimpleCPU::updateCycleCounts()
     if (usermode){
         //captures cycles spend in usermode
         baseStats.numUsrCycles += delta;
-    }
+    }*/
 
     baseStats.numCycles += delta;
     previousCycle = curCycle();
@@ -1670,14 +1667,14 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
             } else {
                 cpu->_trackerstatus = DcacheWaitTrackerResponse;
                 // memory system takes ownership of packet
-                std::cout<<"recvReqRetry send success"<<std::endl;
+                //std::cout<<"recvReqRetry send success"<<std::endl;
                 cpu->dcache_tracker_pkt = NULL;
             }
         }
     } else if (sendTimingReq(tmp)) {
         cpu->_trackerstatus = DcacheWaitTrackerResponse;
         // memory system takes ownership of packet
-        std::cout<<"recvReqRetry send success"<<std::endl;
+        //std::cout<<"recvReqRetry send success"<<std::endl;
         cpu->dcache_tracker_pkt = NULL;
     }
     }
