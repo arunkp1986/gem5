@@ -363,8 +363,8 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         flag = 0;
         r_flag = 0;
         //loop_counter = 0;
-        //num_dirty_packets = 0;
-        //dirty_tracking_done = 0;
+        num_dirty_packets = 0;
+        dirty_tracking_done = 0;
         if (min_address > req->getVaddr()){
             min_address = req->getVaddr();
         }
