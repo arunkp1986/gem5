@@ -357,10 +357,9 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
     }*/
     /*here we are checking the tracking is still valid
      * and vaddr in req is of interest*/
-    if ((tracking_log_gran >= 1) &&\
+    if ((tracking_log_gran == 1) &&\
                     ((start_addr <= req->getVaddr()) && \
-        (req->getVaddr() <= end_addr)) &&\
-                    (req->getPaddr()>=NVM_USER_REG_START) && pkt->isWrite()){
+        (req->getVaddr() <= end_addr)) && pkt->isWrite()){
         flag = 0;
         r_flag = 0;
         //loop_counter = 0;
@@ -396,46 +395,60 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         /*Read to bitmap area in byte granularity tracking*/
         if ((tracking_log_gran == 0) &&\
                         tracking_address &&\
-                        (tracking_address <=
-                         (req->getVaddr() & ((1UL<<37)-1)))){
-            if (!r_flag){
-                /*std::cout<<"num dirty packets: "
+                        (tracking_address <= req->getVaddr() &&\
+                         req->getVaddr() < tracking_address+64)){
+            /*if (!r_flag){
+                std::cout<<"num dirty packets: "
                  * <<num_dirty_packets<<std::endl;
                 std::cout<<"dirty packets done: "
                 <<dirty_tracking_done<<std::endl;
                 std::cout<<"log count: "
-                <<temp_log_count<<std::endl;*/
+                <<temp_log_count<<std::endl;
                 temp_log_count = 0;
                 r_flag = 1;
-            }
+            }*/
             if (num_dirty_packets != dirty_tracking_done){
                     //to check from OS about status
-                /*std::cout<<"num dirty packets: "
-                 * <<num_dirty_packets<<std::endl;
-                std::cout<<"dirty packets done: "
-                <<dirty_tracking_done<<std::endl;*/
+                //std::cout<<"tracking address: "
+                //<<std::hex<<tracking_address<<std::endl;
+                //std::cout<<"not equal"<<std::endl;
+                //std::cout<<"num dirty packets: "
+                //<<num_dirty_packets<<std::endl;
+                //std::cout<<"dirty packets done: "
+                //<<dirty_tracking_done<<std::endl;
                 tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_SYNC,\
                                     0);
                 handleReadPacket(pkt);
-                read_list.push_back(pkt);
+                //read_list.push_back(pkt);
             }
-            else if (!read_list.empty()){
+            /*else if (!read_list.empty()){
                 tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_SYNC,\
                                     1);
                 std::cout<<"read list size: "<<read_list.size() <<std::endl;
-                   /* for (auto it = read_list.begin();
+                    for (auto it = read_list.begin();
                                     it != read_list.end(); it++){
                         //handleReadPacket(*it);
-                    }*/
+                    }
                 read_list.erase(read_list.begin(),read_list.end());
                 handleReadPacket(pkt);
-            }
+            }*/
             else{
+                if (!r_flag){
                 tc->setMiscRegNoEffect(\
                                     gem5::X86ISA::MISCREG_TRACK_SYNC,\
-                                    1);
+                                    temp_log_count);
+                //std::cout<<"log count: "<<temp_log_count<<std::endl;
+                //std::cout<<"num dirty packets: "
+                //<<num_dirty_packets<<std::endl;
+                //std::cout<<"dirty packets done: "
+                //<<dirty_tracking_done<<std::endl;
+                temp_log_count = 0;
+                num_dirty_packets = 0;
+                dirty_tracking_done = 0;
+                r_flag = 1;
+                }
                 handleReadPacket(pkt);
             }
         }
@@ -1152,9 +1165,6 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
     // received a response from the icache: execute the received
     // instruction
     assert(!pkt || !pkt->isError());
-    if (!(_status == IcacheWaitResponse)){
-        std::cout<<"bug"<<std::endl;
-    }
     assert(_status == IcacheWaitResponse);
 
     _status = BaseSimpleCPU::Running;
@@ -1508,6 +1518,8 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
         }
         if (pkt->isWrite()){
              cpu->dirty_tracking_done += 1;
+             //std::cout<<"response dirty pkt"
+             //<<cpu->dirty_tracking_done<<std::endl;
              //Addr dirty_address = pkt->getAddr();
              delete pkt;
              //std::cout<<"WResp Address: "<<pkt->getAddr()<<std::endl;
@@ -1536,10 +1548,6 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
 void
 TimingSimpleCPU::DcachePort::DTickEvent::process()
 {
-    if (pkt->getTracker()){
-        std::cout<<"inside dcacheport process"<<std::endl;
-        return;
-    }
     cpu->completeDataAccess(pkt);
 }
 
@@ -1599,9 +1607,12 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
              cpu->list_tracker_pkt.push_back(tmp);
              //std::cout<<"recvReqRetry send failed"<<std::endl;
              break;
+            }else{
+             cpu->_trackerstatus = DcacheWaitTrackerResponse;
+             //std::cout<<"recvReqRetry send success"<<std::endl;
+             cpu->num_dirty_packets += 1;
             }
         }
-        cpu->_trackerstatus = DcacheWaitTrackerResponse;
     }
     /* if (tmp->senderState) {
         // This is a packet from a split access.
