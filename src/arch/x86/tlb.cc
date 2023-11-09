@@ -79,15 +79,19 @@ TLB::TLB(const Params &p)
 }
 
 Addr
-TLB::setupSSP(const RequestPtr &req, TlbEntry *entry, BaseMMU::Mode mode){
+TLB::setupSSP(Addr bitmap_address, const RequestPtr &req,
+                TlbEntry *entry, BaseMMU::Mode mode){
     Addr paddr = 0;
+    unsigned long ssp_offset = 0;
     Addr vaddr = req->getVaddr();
     unsigned cacheline = (vaddr>>6)&0x3f;
     assert(cacheline < 64);
-    //std::cout<<"setupSSP"<<std::endl;
-    //assert(sizeof(entry->current_bitmap) == 8);
+    req->set_is_ssp_request(0);
+    if (!entry->p1){
+        std::cout<<"p1 is zero"<<std::endl;
+        return entry->paddr;
+    }
     if (entry->updated_bitmap & (1UL<<cacheline)){
-        //std::cout<<"updated bitmap already set"<<std::endl;
         if (entry->current_bitmap & (1UL<<cacheline)){
             paddr = entry->p1;
         }else{
@@ -102,8 +106,25 @@ TLB::setupSSP(const RequestPtr &req, TlbEntry *entry, BaseMMU::Mode mode){
         if (mode == BaseMMU::Write){
             entry->updated_bitmap |= (1UL<<cacheline);
             req->set_is_ssp_request(1);
-            req->set_P1addr(entry->p1);
+            if (entry->current_bitmap & (1UL<<cacheline)){
+                req->set_P1addr(entry->paddr);
+            }else{
+                req->set_P1addr(entry->p1);
+            }
             entry->current_bitmap ^= (1UL<<cacheline);
+            //send updated current bitmap
+            ssp_offset = ((entry->paddr&~(0xfff))-NVM_USER_REG_START)>>12;
+            struct ssp_entry* temp_entry = (struct ssp_entry*)(bitmap_address+
+                            (ssp_offset*sizeof(struct ssp_entry)));
+            Request::Flags flags = Request::PHYSICAL;
+            Addr write_address = (Addr)&(temp_entry->current_bitmap);
+            RequestPtr request = std::make_shared<Request>(write_address,
+                        8, flags, walker->getrequestorId());
+            PacketPtr write = new Packet(request, MemCmd::WriteReq);
+            write->allocate();
+            write->setData((uint8_t*)&entry->current_bitmap);
+            write->setSSP(1);
+            walker->sendTimingbitmap(write);
         }
     }
     return paddr;
@@ -131,7 +152,6 @@ TLB::evictLRU()
         Request::Flags flags = Request::PHYSICAL;
         if (tlb[lru].current_bitmap > 0){
             Addr write_address1 = (Addr)&(temp_entry->current_bitmap);
-            //assert(sizeof(temp_entry->current_bitmap) == 8);
             RequestPtr request1 = std::make_shared<Request>(
                             write_address1, 8, flags,
                             walker->getrequestorId());
@@ -143,7 +163,6 @@ TLB::evictLRU()
         }
         if (tlb[lru].updated_bitmap>0){
             Addr write_address2 = (Addr)&(temp_entry->updated_bitmap);
-            //assert(sizeof(temp_entry->updated_bitmap) == 8);
             RequestPtr request2 = std::make_shared<Request>(
                             write_address2, 8, flags,
                             walker->getrequestorId());
@@ -154,7 +173,6 @@ TLB::evictLRU()
             walker->sendTimingbitmap(write2);
             unsigned evicted = 1;
             Addr write_address3 = (Addr)&(temp_entry->evicted);
-            //assert(sizeof(temp_entry->evicted) == 4);
             RequestPtr request3 = std::make_shared<Request>(
                             write_address3, sizeof(unsigned), flags,
                             walker->getrequestorId());
@@ -517,8 +535,10 @@ TLB::translate(const RequestPtr &req,
 {
     Request::Flags flags = req->getFlags();
     int seg = flags & SegmentFlagMask;
-    static uint8_t ssp_flag_start = 0;
+    //static uint8_t ssp_flag_start = 0;
     static uint8_t ssp_flag_end = 0;
+    unsigned long ssp_offset = 0;
+    Addr bitmap_address = walker->get_bitmap_address();
     bool storeCheck = flags & Request::READ_MODIFY_WRITE;
     uint16_t tracking_log_gran = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
@@ -528,7 +548,6 @@ TLB::translate(const RequestPtr &req,
                     gem5::X86ISA::MISCREG_SSP_END);
 
     delayedResponse = false;
-
     // If this is true, we're dealing with a request to a non-memory address
     // space.
     if (seg == SEGMENT_REG_MS) {
@@ -537,6 +556,44 @@ TLB::translate(const RequestPtr &req,
 
     Addr vaddr = req->getVaddr();
     DPRINTF(TLB, "Translating vaddr %#x.\n", vaddr);
+    if (tracking_log_gran == 0 &&
+                    (bitmap_address <= vaddr &&
+                    vaddr<(bitmap_address+64)) && !ssp_flag_end){
+        //std::cout<<"bitmap aread read"<<std::endl;
+        //ssp_flag_start = 1;
+        ssp_flag_end = 1;
+        for (int i = 1; i < size; i++){
+            if ((tlb[i].paddr >= NVM_USER_REG_START)){
+                ssp_offset = ((tlb[i].paddr&~(0xfff))-NVM_USER_REG_START)>>12;
+                struct ssp_entry* temp_entry = (struct ssp_entry*)(
+                                bitmap_address+
+                            (ssp_offset*sizeof(struct ssp_entry)));
+                Request::Flags flags = Request::PHYSICAL;
+                if (tlb[i].updated_bitmap > 0){
+                Addr write_address = (Addr)&(temp_entry->updated_bitmap);
+                RequestPtr request2 = std::make_shared<Request>(
+                                write_address, 8, flags,
+                                walker->getrequestorId());
+                PacketPtr write = new Packet(request2, MemCmd::WriteReq);
+                write->allocate();
+                write->setData((uint8_t*)&(tlb[i].updated_bitmap));
+                write->setSSP(1);
+                walker->sendTimingbitmap(write);
+                }
+                if (tlb[i].current_bitmap > 0){
+                Addr write_address3 = (Addr)&(temp_entry->current_bitmap);
+                RequestPtr request3 = std::make_shared<Request>(
+                                write_address3, 8, flags,
+                                walker->getrequestorId());
+                PacketPtr write3 = new Packet(request3, MemCmd::WriteReq);
+                write3->allocate();
+                write3->setSSP(1);
+                write3->setData((uint8_t*)&(tlb[i].current_bitmap));
+                walker->sendTimingbitmap(write3);
+                }
+            }
+        }
+    }
 
     HandyM5Reg m5Reg = tc->readMiscRegNoEffect(MISCREG_M5_REG);
 
@@ -652,65 +709,29 @@ TLB::translate(const RequestPtr &req,
                     vaddr, true, BaseMMU::Write, inUser, false);
             }
             Addr paddr = entry->paddr | (vaddr & mask(entry->logBytes));
-            //std::cout<<"paddr: "<<paddr<<std::endl;
-            Addr bitmap_address = walker->get_bitmap_address();
             //SSP changes
-            if (bitmap_address > 0 &&
-                            (addr_start <= vaddr && vaddr < addr_end)){
-                if (entry->p1 > 0){
-                    Addr ssp_paddr = setupSSP(req,entry,mode);
-                    paddr = ssp_paddr | (vaddr & mask(entry->logBytes));
-                }
+            if (bitmap_address > 0 && (vaddr>addr_start && vaddr<addr_end) &&
+                            (entry->paddr >= NVM_USER_REG_START)){
+                Addr ssp_paddr = setupSSP(bitmap_address,req,entry,mode);
+                paddr = ssp_paddr | (vaddr & mask(entry->logBytes));
+            }
+            if (bitmap_address <= vaddr && vaddr<(bitmap_address+64)){
                 if (tracking_log_gran >= 1){
-                    //std::cout<<"heap vaddr: "<<std::hex<<vaddr<<std::endl;
                     ssp_flag_end = 0;
-                    if (!ssp_flag_start){
-                        //std::cout<<"ssp flag start only once"<<std::endl;
-                        ssp_flag_start = 1;
-
-                }}
-         else{
-             if (!ssp_flag_end){
-                 //std::cout<<"end interval"<<std::endl;
-                 ssp_flag_end = 1;
-                 ssp_flag_start = 0;
-                 unsigned long ssp_offset = 0;
-                 for (unsigned i = 1; i < size; i++) {
-                     if (tlb[i].updated_bitmap >0 &&
-                           (tlb[i].paddr >= NVM_USER_REG_START)){
-                         ssp_offset = ((tlb[i].paddr&~(0xfff))-
-                                         NVM_USER_REG_START)>>12;
-                         struct ssp_entry* temp_entry =
-                                   (struct ssp_entry*)(bitmap_address+
-                                      (ssp_offset*sizeof(struct ssp_entry)));
-                         Addr write_address =
-                                 (Addr)&(temp_entry->updated_bitmap);
-                         Request::Flags flags = Request::PHYSICAL;
-                         RequestPtr request = std::make_shared<Request>(\
-                                                write_address, 8, flags,
-                                                walker->getrequestorId());
-                         PacketPtr write = new Packet(
-                                         request, MemCmd::WriteReq);
-                         write->allocate();
-                         write->setData((uint8_t*)&(tlb[i].updated_bitmap));
-                         write->setSSP(1);
-                         walker->sendTimingbitmap(write);
-                     }}
-                    }
-                    else{
-                        if (walker->ssp_packet_send ==
-                                        walker->ssp_packet_received){
-                            //tc->setMiscRegNoEffect(
-                              //    gem5::X86ISA::MISCREG_TRACK_SYNC,
-                                //  (uint64_t)1);
-                        }
+                    /*tc->setMiscRegNoEffect(
+                                     gem5::X86ISA::MISCREG_TRACK_SYNC,
+                                  (uint64_t)0);*/
+                }else{
+                    if (walker->ssp_packet_send ==\
+                                 walker->ssp_packet_received){
+                     /*tc->setMiscRegNoEffect(
+                                     gem5::X86ISA::MISCREG_TRACK_SYNC,
+                                  (uint64_t)1);*/
                     }
                 }
             }
             DPRINTF(TLB, "Translated %#x -> %#x.\n", vaddr, paddr);
             req->setPaddr(paddr);
-            //req->set_is_ssp_request(1);
-
             if (entry->uncacheable)
                 req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
         } else {

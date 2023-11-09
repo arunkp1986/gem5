@@ -129,7 +129,7 @@ namespace X86ISA
       public:
 
         void evictLRU();
-        Addr setupSSP(const RequestPtr &req,
+        Addr setupSSP(Addr bitmap_address, const RequestPtr &req,
                         TlbEntry *entry, BaseMMU::Mode mode);
 
         uint64_t

@@ -420,13 +420,6 @@ void
 BaseCache::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
-    RequestPtr req1 = pkt->req;
-    if (req1->get_is_ssp_request()){
-        Addr p1 = req1->get_P1addr();
-        Addr pkt_addr = pkt->getAddr();
-        Addr pkt_new_addr = (p1 & ~0xfff)|(pkt_addr & 0xfff);
-        pkt->setAddr(pkt_new_addr);
-    }
 
     // all header delay should be paid for by the crossbar, unless
     // this is a prefetch response from above
@@ -486,6 +479,26 @@ BaseCache::recvTimingResp(PacketPtr pkt)
     assert(!mshr->wasWholeLineWrite || pkt->isInvalidate());
 
     CacheBlk *blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
+    CacheBlk *temp_blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
+    RequestPtr req1 = pkt->req;
+    if (req1->get_is_ssp_request()){
+        Addr p1 = req1->get_P1addr();
+        Addr pkt_addr = pkt->getAddr();
+        Addr pkt_new_addr = (p1 & ~0xfff)|(pkt_addr & 0xfff);
+        pkt->setAddr(pkt_new_addr);
+        blk = tags->findBlock(pkt_new_addr, pkt->isSecure());
+        if (temp_blk){
+            if (!blk){
+                //std::cout<<"copy from temp blk to blk"<<std::endl;
+                const Tick blk_ready = temp_blk->getWhenReady();
+                //pkt->setAddr(pkt_new_addr);
+                blk = allocateBlock(pkt, writebacks);
+                //blk = temp_blk;
+                blk->new_setWhenReady(blk_ready);
+                memcpy(blk->data,temp_blk->data,blkSize);
+            }
+        }
+    }
 
     if (is_fill && !is_error) {
         DPRINTF(Cache, "Block for addr %#llx being updated in Cache\n",

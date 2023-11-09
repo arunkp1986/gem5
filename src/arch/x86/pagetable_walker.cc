@@ -106,8 +106,20 @@ Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
    if (pkt->getSSP()){
        walker->ssp_packet_received += 1;
-       delete pkt;
-       return true;
+       if (pkt->isRead()){
+           uint8_t data[4];
+           pkt->getData(data);
+           unsigned temp = 3;
+           memcpy(data,&temp,4);
+           pkt->setData(data);
+           pkt->setTcmd(MemCmd::WriteReq);
+           pkt->setSSP(1);
+           walker->sendTimingbitmap(pkt);
+           return true;
+       }else{
+           delete pkt;
+           return true;
+       }
    }
    return walker->recvTimingResp(pkt);
 }
@@ -213,7 +225,7 @@ Walker::WalkerState::initState(ThreadContext * _tc,
         //std::cout<<"inside"<<std::endl;
         walker->bitmap_address = tc->readMiscRegNoEffect(
                         gem5::X86ISA::MISCREG_SSP_ADDR);
-       // walker->bitmap_address = 0;
+        //walker->bitmap_address = 0;
     }
 }
 
@@ -437,7 +449,6 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         }
         break;
       case LongSSP1:
-        //std::cout<<"SSP1 "<<std::endl;
         if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
             nextState = LongSSP2;
             Addr p1;
@@ -448,19 +459,13 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                     (struct ssp_entry*)(walker->bitmap_address+
                                     (ssp_offset*sizeof(struct ssp_entry)));
             nextRead = (Addr)&temp_entry->current_bitmap;
-            //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
-            //std::cout<<"p0: "<<std::hex<<entry.paddr<<std::endl;
-            //std::cout<<"p1: "<<std::hex<<entry.p1<<std::endl;
+            write_address = (Addr)&(temp_entry->evicted);
         }else{
             doTLBInsert = true;
             doEndWalk = true;
         }
-        //doTLBInsert = true;
-        //doEndWalk = true;
-        //doWrite = false;
         break;
       case LongSSP2:
-        //std::cout<<"SSP2 "<<std::endl;
         if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
             nextState = LongSSP3;
             uint64_t current_bitmap;
@@ -471,27 +476,16 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
                     (struct ssp_entry*)(walker->bitmap_address+
                                     (ssp_offset*sizeof(struct ssp_entry)));
             nextRead = (Addr)&temp_entry->updated_bitmap;
-            //std::cout<<"next address: "<<std::hex<<nextRead<<std::endl;
         }else{
             doTLBInsert = true;
             doEndWalk = true;
         }
-        //doTLBInsert = true;
-        //doEndWalk = true;
-        //doWrite = false;
         break;
       case LongSSP3:
-        //std::cout<<"SSP3: "<<std::endl;
         if (walker->bitmap_address>0 && (entry.paddr >= NVM_USER_REG_START)){
             uint64_t updated_bitmap;
             read->getData((uint8_t *)&updated_bitmap);
             entry.updated_bitmap = updated_bitmap;
-            ssp_offset = ((entry.paddr&~(0xfff))-NVM_USER_REG_START)>>12;
-            struct ssp_entry* temp_entry =
-                    (struct ssp_entry*)(walker->bitmap_address+
-                                    (ssp_offset*sizeof(struct ssp_entry)));
-            write_address = (Addr)&(temp_entry->evicted);
-            //std::cout<<"updated bitmap: "<<updated_bitmap<<std::endl;
         }
         doTLBInsert = true;
         doEndWalk = true;
@@ -639,7 +633,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         } else {
             write = NULL;
         }
-        if (state == LongSSP3){
+        /*if (state == LongSSP3){
         //change entry as not evicted in ssp cache
             unsigned ssp_evict = 0;
             Request::Flags ssp_flags = Request::PHYSICAL;
@@ -652,12 +646,25 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             ssp_write->setSSP(1);
             ssp_write->setData((uint8_t*)&ssp_evict);
             walker->sendTimingbitmap(ssp_write);
-        }
+        }*/
         if (doTLBInsert)
             if (!functional)
                 walker->tlb->insert(entry.vaddr, entry);
         endWalk();
     } else {
+            if (state == LongSSP1){
+            unsigned ssp_evict = 0;
+            Request::Flags ssp_flags = Request::PHYSICAL;
+            assert(write_address > 0);
+            RequestPtr ssp_req = std::make_shared<Request>(
+                            write_address, sizeof(unsigned), ssp_flags,
+                            walker->getrequestorId());
+            PacketPtr ssp_write = new Packet(ssp_req, MemCmd::WriteReq);
+            ssp_write->allocate();
+            ssp_write->setSSP(1);
+            ssp_write->setData((uint8_t*)&ssp_evict);
+            walker->sendTimingbitmap(ssp_write);
+        }
         PacketPtr oldRead = read;
         //If we didn't return, we're setting up another read.
         Request::Flags flags = oldRead->req->getFlags();
