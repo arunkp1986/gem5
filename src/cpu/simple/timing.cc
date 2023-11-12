@@ -346,12 +346,12 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
                     gem5::X86ISA::MISCREG_LOG_TRACK_GRAN);
     Addr tracking_address = tc->readMiscRegNoEffect(\
                     gem5::X86ISA::MISCREG_DIRTYMAP_ADDR);
-    //bitmap_address = tracking_address;
+    bitmap_address = tracking_address;
     /*if (stack_start>1 && pkt->isWrite()){
     std::cout<<"stack start: "<<std::hex<<stack_start<<std::endl;
     std::cout<<"stack end: "<<std::hex<<stack_end<<std::endl;
     std::cout<<"tracking address: "<<std::hex<<tracking_address<<std::endl;
-    //std::cout<<"tracking gran: "<<std::hex<<tracking_log_gran<<std::endl;
+    std::cout<<"tracking gran: "<<std::hex<<tracking_log_gran<<std::endl;
     std::cout<<"address: "<<std::hex<<(req->getVaddr())<<std::endl;
     }*/
     /*here we are checking the tracking is still valid
@@ -398,10 +398,10 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         /*Read to bitmap area in byte granularity tracking*/
         //std::cout<<"tracking gran: "<<std::hex<<tracking_log_gran<<std::endl;
 
-        if ((tracking_log_gran == 0) &&\
+        if ((tracking_log_gran == 1) &&\
                         tracking_address &&\
-                        (tracking_address <= req->getVaddr() &&\
-                         req->getVaddr() < tracking_address+64)){
+                       (tracking_address <= (req->getVaddr()&0xfffffffff)) &&\
+                       ((req->getVaddr()&0xfffffffff) < tracking_address+64)){
             //This corresponds to comparator flush initiator read.
              //process any pending requests in queue*
              //std::cout<<"address: "<<std::hex<<req->getVaddr()<<std::endl;
@@ -474,6 +474,7 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
         else{
             handleReadPacket(pkt);
         }
+            //handleReadPacket(pkt);
     } else {
         bool do_access = true;  // flag to suppress cache access
 
