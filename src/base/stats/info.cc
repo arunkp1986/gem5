@@ -69,7 +69,8 @@ nameMap()
 }
 
 Info::Info()
-    : flags(none), precision(-1), prereq(0), storageParams()
+    : maxRegions(3), maxContexts(4), reg_enable(0),
+        flags(none), precision(-1), prereq(0), storageParams()
 {
     id = id_count++;
     if (debug_break_id >= 0 and debug_break_id == id)

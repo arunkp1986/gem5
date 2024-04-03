@@ -589,6 +589,62 @@ Text::visit(const ScalarInfo &info)
     if (noOutput(info))
         return;
 
+    /** We first print stats across regions followed by global stats.
+      * Region ID 2 prints Kernel Mode stats.
+      * Region ID 1 prints User Mode stats.
+      * Region ID 0 is saved for Global region.
+      */
+    const int max_regions = info.maxRegions;
+    const int max_contexts = info.maxContexts;
+    if (info.reg_enable){
+        for (int ctx_id = 0; ctx_id < max_contexts; ctx_id++){
+            for (int region_id = 1; region_id < max_regions; region_id++) {
+                const std::string region = "_ctx_"+std::to_string(ctx_id)+
+                        "_region_" +std::to_string(region_id);
+                ScalarPrint print(spaces);
+                print.setup(statName(info.name + region), info.flags,
+                        info.precision, descriptions,
+                        info.desc, enableUnits,
+                        info.unit->getUnitString(), spaces);
+                print.value = info.result(ctx_id,region_id);
+                print.pdf = Nan;
+                print.cdf = Nan;
+                if (print.value)
+                    print(*stream);
+            }
+        }
+            const std::string region = "_Total";
+            ScalarPrint print(spaces);
+            print.setup(statName(info.name + region), info.flags,
+                        info.precision, descriptions,
+                        info.desc, enableUnits,
+                        info.unit->getUnitString(), spaces);
+            print.value = info.result(); // 0-based indexing
+            print.pdf = Nan;
+            print.cdf = Nan;
+            print(*stream);
+    }
+    else{
+    /** Print stats aggregated across all regions. */
+        ScalarPrint print(spaces);
+        print.setup(statName(info.name), info.flags,
+                         info.precision, descriptions,
+                         info.desc, enableUnits,
+                         info.unit->getUnitString(), spaces);
+        print.value = info.result();
+        print.pdf = Nan;
+        print.cdf = Nan;
+        print(*stream);
+    }
+}
+
+#if 0
+void
+Text::visit(const ScalarInfo &info)
+{
+    if (noOutput(info))
+        return;
+
     ScalarPrint print(spaces);
     print.setup(statName(info.name), info.flags, info.precision, descriptions,
         info.desc, enableUnits, info.unit->getUnitString(), spaces);
@@ -598,7 +654,118 @@ Text::visit(const ScalarInfo &info)
 
     print(*stream);
 }
+#endif
 
+void
+Text::visit(const VectorInfo &info)
+{
+    if (noOutput(info))
+        return;
+   /** We first print stats across regions followed by global stats.
+      * Region ID 2 prints Kernel Mode stats.
+      * Region ID 1 prints User Mode stats.
+      * Region ID 0 is saved for Global region.
+      */
+    const int max_regions = info.maxRegions;
+    const int max_contexts = info.maxContexts;
+    if (info.reg_enable){
+    /** Print Vector Statistics for all regions. */
+    for (int ctx_id = 0; ctx_id < max_contexts; ctx_id++){
+    for (int region_id = 1; region_id < max_regions; region_id++) {
+        size_type size = info.size();
+        VectorPrint print(spaces);
+        const std::string region = "_ctx_"+std::to_string(ctx_id)+
+                "_region_" +std::to_string(region_id);
+        print.setup(statName(info.name + region), info.flags,
+                        info.precision, descriptions,
+            info.desc, enableUnits, info.unit->getUnitString(), spaces);
+        print.separatorString = info.separatorString;
+        print.vec = info.result_region(ctx_id,region_id); // 0-based indexing
+        print.total = info.total_region(ctx_id,region_id);
+        print.forceSubnames = false;
+
+        if (!info.subnames.empty()) {
+            for (off_type i = 0; i < size; ++i) {
+                if (!info.subnames[i].empty()) {
+                    print.subnames = info.subnames;
+                    print.subnames.resize(size);
+                    for (off_type i = 0; i < size; ++i) {
+                        if (!info.subnames[i].empty() &&
+                            !info.subdescs[i].empty()) {
+                            print.subdescs = info.subdescs;
+                            print.subdescs.resize(size);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        print(*stream);
+    }
+    }
+        size_type size = info.size();
+        VectorPrint print(spaces);
+        const std::string region = "_Total";
+        print.setup(statName(info.name + region),
+                        info.flags, info.precision, descriptions,
+            info.desc, enableUnits, info.unit->getUnitString(), spaces);
+        print.separatorString = info.separatorString;
+        print.vec = info.result(); // 0-based indexing
+        print.total = info.total();
+        print.forceSubnames = false;
+
+        if (!info.subnames.empty()) {
+            for (off_type i = 0; i < size; ++i) {
+                if (!info.subnames[i].empty()) {
+                    print.subnames = info.subnames;
+                    print.subnames.resize(size);
+                    for (off_type i = 0; i < size; ++i) {
+                        if (!info.subnames[i].empty() &&
+                            !info.subdescs[i].empty()) {
+                            print.subdescs = info.subdescs;
+                            print.subdescs.resize(size);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        print(*stream);
+    }
+    else{
+    /** Print aggregated stats across all regions.
+      * TODO(@divyac) Code duplication while printing stats. Fix it. */
+    size_type size = info.size();
+    VectorPrint print(spaces);
+    print.setup(statName(info.name), info.flags, info.precision, descriptions,
+        info.desc, enableUnits, info.unit->getUnitString(), spaces);
+    print.separatorString = info.separatorString;
+    print.vec = info.result();
+    print.total = info.total();
+    print.forceSubnames = false;
+    if (!info.subnames.empty()) {
+        for (off_type i = 0; i < size; ++i) {
+            if (!info.subnames[i].empty()) {
+                print.subnames = info.subnames;
+                print.subnames.resize(size);
+                for (off_type i = 0; i < size; ++i) {
+                    if (!info.subnames[i].empty() &&
+                        !info.subdescs[i].empty()) {
+                        print.subdescs = info.subdescs;
+                        print.subdescs.resize(size);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    print(*stream);
+    }
+}
+
+#if 0
 void
 Text::visit(const VectorInfo &info)
 {
@@ -634,6 +801,8 @@ Text::visit(const VectorInfo &info)
 
     print(*stream);
 }
+
+#endif
 
 void
 Text::visit(const Vector2dInfo &info)

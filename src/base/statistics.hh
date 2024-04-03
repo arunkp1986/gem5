@@ -61,9 +61,12 @@
 
 #include <algorithm>
 #include <cassert>
+
 #ifdef __SUNPRO_CC
-#include <math.h>
+#include <cmath>
+
 #endif
+#include <array>
 #include <cmath>
 #include <functional>
 #include <iosfwd>
@@ -73,6 +76,7 @@
 #include <string>
 #include <vector>
 
+#include "arch/x86/regs/misc.hh"
 #include "base/cast.hh"
 #include "base/compiler.hh"
 #include "base/cprintf.hh"
@@ -86,6 +90,20 @@
 #include "base/stats/units.hh"
 #include "base/str.hh"
 #include "base/types.hh"
+#include "cpu/thread_context.hh"
+#include "params/StatisticsBase.hh"
+#include "sim/sim_object.hh"
+
+/*
+ * MAX_REG is used as
+ *Index 0-> Total
+ *Index 1-> User Mode
+ *Index 2-> Kernel Mode
+ * */
+inline constexpr int MAX_REG = 5;
+inline constexpr int MAX_CONTEXT = 8;
+inline constexpr int IS_REG = 1;
+inline constexpr int IS_CTX = 1;
 
 namespace gem5
 {
@@ -93,6 +111,9 @@ namespace gem5
 /* A namespace for all of the Statistics */
 namespace statistics
 {
+
+extern unsigned max_ctx;
+extern unsigned max_reg;
 
 template <class Stat, class Base>
 class InfoProxy : public Base
@@ -122,6 +143,8 @@ class ScalarInfoProxy : public InfoProxy<Stat, ScalarInfo>
 
     Counter value() const { return this->s.value(); }
     Result result() const { return this->s.result(); }
+    Result result(int ctx_id,int region_id) const {
+            return this->s.result(ctx_id,region_id);}
     Result total() const { return this->s.total(); }
 };
 
@@ -150,8 +173,17 @@ class VectorInfoProxy : public InfoProxy<Stat, VectorInfo>
         this->s.result(rvec);
         return rvec;
     }
+    const VResult &
+    result_region(int ctx_id, int region_id) const
+    {
+        this->s.result_region(ctx_id,region_id,rvec);
+        return rvec;
+    }
+
 
     Result total() const { return this->s.total(); }
+    Result total_region(int ctx_id, int region_id) const {
+            return this->s.total_region(ctx_id,region_id); }
 };
 
 template <class Stat>
@@ -511,20 +543,48 @@ class DataWrapVec2d : public DataWrapVec<Derived, InfoProxyType>
 //
 //////////////////////////////////////////////////////////////////////
 
+
+class StatisticsBase: public SimObject
+{
+    public:
+        //unsigned max_ctx;
+
+        StatisticsBase();
+
+        StatisticsBase(const StatisticsBaseParams &p)
+                : SimObject(p){
+                    max_ctx = p.max_context;
+                    max_reg = p.max_region;
+                }
+
+        unsigned get_max_context(){
+            return max_ctx;
+        }
+        unsigned get_max_region(){
+            return max_reg;
+        }
+};
+
 /**
  * Implementation of a scalar stat. The type of stat is determined by the
  * Storage template.
  */
+/*
+ *Index 0-> Total
+ *Index 1-> User Mode
+ *Index 2-> Kernel Mode
+ * */
 template <class Derived, class Stor>
 class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
 {
   public:
     typedef Stor Storage;
     typedef typename Stor::Params Params;
+    ThreadContext * tc = nullptr;
 
   protected:
     /** The storage of this stat. */
-    GEM5_ALIGNED(8) char storage[sizeof(Storage)];
+    GEM5_ALIGNED(8) char storage[MAX_CONTEXT][MAX_REG][sizeof(Storage)];
 
   protected:
     /**
@@ -535,7 +595,12 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
     Storage *
     data()
     {
-        return reinterpret_cast<Storage *>(storage);
+        return reinterpret_cast<Storage *>(storage[max_ctx][0]);
+    }
+    Storage *
+    data(int ctx_id, int index)
+    {
+        return reinterpret_cast<Storage *>(storage[ctx_id][index]);
     }
 
     /**
@@ -547,13 +612,121 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
     const Storage *
     data() const
     {
-        return reinterpret_cast<const Storage *>(storage);
+        return reinterpret_cast<const Storage *>(storage[max_ctx][0]);
+    }
+    const Storage *
+    data(int ctx_id, int index) const
+    {
+        return reinterpret_cast<const Storage *>(storage[ctx_id][index]);
+    }
+
+
+    const Storage *
+    data_ctx_region() const
+    {
+        int region_id = 0;
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (region_id > 0 && ctx_id < max_ctx){
+                //std::cout<<"region: "<<region_id<<"ctx: "<<ctx_id<<std::endl;
+                return reinterpret_cast<const Storage *>(
+                                storage[ctx_id][region_id]);
+            }
+        }
+        return NULL;
+    }
+
+    const Storage *
+    data_region() const
+    {
+        int region_id = 0;
+        //unsigned maximum_ctx = this->info()->maxContexts;
+        if (IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            if (region_id > 0){
+                return reinterpret_cast<const Storage *>(
+                                storage[max_ctx][region_id]);
+            }
+        }
+        return NULL;
+    }
+
+    const Storage *
+    data_ctx() const
+    {
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && tc != nullptr) {
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (ctx_id < max_ctx){
+                return reinterpret_cast<const Storage *>(storage[ctx_id][0]);
+            }
+        }
+        return NULL;
+    }
+
+    Storage *
+    data_ctx_region()
+    {
+        int region_id = 0;
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (region_id > 0 && ctx_id < max_ctx){
+                //std::cout<<"region: "<<region_id<<"ctx: "<<ctx_id<<std::endl;
+                return reinterpret_cast<Storage *>(storage[ctx_id][region_id]);
+            }
+        }
+        return NULL;
+    }
+
+    Storage *
+    data_region()
+    {
+        int region_id = 0;
+        //unsigned maximum_ctx = this->info()->maxContexts;
+        if (IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            if (region_id > 0){
+                return reinterpret_cast<Storage *>(
+                                storage[max_ctx][region_id]);
+            }
+        }
+        return NULL;
+    }
+
+    Storage *
+    data_ctx()
+    {
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && tc != nullptr) {
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (ctx_id < max_ctx){
+                return reinterpret_cast<Storage *>(storage[ctx_id][0]);
+            }
+        }
+        return NULL;
     }
 
     void
     doInit()
     {
-        new (storage) Storage(this->info()->getStorageParams());
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT ; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                new (storage[ctx_id][region_id]) Storage(
+                                this->info()->getStorageParams());
+            }
+        }
         this->setInit();
     }
 
@@ -572,13 +745,34 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
      * Increment the stat by 1. This calls the associated storage object inc
      * function.
      */
-    void operator++() { data()->inc(1); }
+    void operator++() {
+            data()->inc(1);
+            if (data_ctx_region()){
+                data_ctx_region()->inc(1);
+            }
+            if (data_region()){
+                data_region()->inc(1);
+            }
+            if (data_ctx()){
+                data_ctx()->inc(1);
+            }
+    }
     /**
      * Decrement the stat by 1. This calls the associated storage object dec
      * function.
      */
-    void operator--() { data()->dec(1); }
-
+    void operator--() {
+            data()->dec(1);
+            if (data_ctx_region()){
+                data_ctx_region()->dec(1);
+            }
+            if (data_region()){
+                data_region()->dec(1);
+            }
+            if (data_ctx()){
+                data_ctx()->dec(1);
+            }
+    }
     /** Increment the stat by 1. */
     void operator++(int) { ++*this; }
     /** Decrement the stat by 1. */
@@ -590,7 +784,18 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
      * @param v The new value.
      */
     template <typename U>
-    void operator=(const U &v) { data()->set(v); }
+    void operator=(const U &v) {
+            data()->set(v);
+            if (data_ctx_region()){
+                data_ctx_region()->set(v);
+            }
+            if (data_region()){
+                data_region()->set(v);
+            }
+            if (data_ctx()){
+                data_ctx()->set(v);
+            }
+    }
 
     /**
      * Increment the stat by the given value. This calls the associated
@@ -598,7 +803,18 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
      * @param v The value to add.
      */
     template <typename U>
-    void operator+=(const U &v) { data()->inc(v); }
+    void operator+=(const U &v) {
+            data()->inc(v);
+            if (data_ctx_region()){
+                data_ctx_region()->inc(v);
+            }
+            if (data_region()){
+                data_region()->inc(v);
+            }
+            if (data_ctx()){
+                data_ctx()->inc(v);
+            }
+    }
 
     /**
      * Decrement the stat by the given value. This calls the associated
@@ -606,8 +822,25 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
      * @param v The value to substract.
      */
     template <typename U>
-    void operator-=(const U &v) { data()->dec(v); }
+    void operator-=(const U &v) {
+            data()->dec(v);
+            if (data_ctx_region()){
+                data_ctx_region()->dec(v);
+            }
+            if (data_region()){
+                data_region()->dec(v);
+            }
+            if (data_ctx()){
+                data_ctx()->dev(v);
+            }
+    }
 
+    void updateProperty(int ctx_id, int region_id, double delta) {
+            data()->inc(delta); //to update overall total
+            data(ctx_id,0)->inc(delta);
+            data(max_ctx,region_id)->inc(delta);
+            data(ctx_id,region_id)->inc(delta);
+    }
     /**
      * Return the number of elements, always 1 for a scalar.
      * @return 1.
@@ -622,12 +855,33 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
 
     Result result() const { return data()->result(); }
 
+    Result result(int ctx_id, int region_id) const {
+            return data(ctx_id,region_id)->result(); }
     Result total() const { return result(); }
 
     bool zero() const { return result() == 0.0; }
 
-    void reset() { data()->reset(this->info()->getStorageParams()); }
-    void prepare() { data()->prepare(this->info()->getStorageParams()); }
+    void
+    reset()
+    {
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                data(ctx_id,region_id)->reset(
+                                this->info()->getStorageParams());
+            }
+        }
+    }
+    void
+    prepare()
+    {
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT ; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                data(ctx_id,region_id)->prepare(
+                                this->info()->getStorageParams());
+            }
+        }
+    }
+    //void prepare() { data()->prepare(this->info()->getStorageParams()); }
 };
 
 class ProxyInfo : public ScalarInfo
@@ -653,6 +907,8 @@ class ValueProxy : public ProxyInfo
     ValueProxy(T &val) : scalar(&val) {}
     Counter value() const { return *scalar; }
     Result result() const { return *scalar; }
+    Result result(int ctx_id, int index) const {
+            return *scalar; } //Need to check this
     Result total() const { return *scalar; }
 };
 
@@ -666,6 +922,8 @@ class FunctorProxy : public ProxyInfo
     FunctorProxy(T &func) : functor(&func) {}
     Counter value() const { return (*functor)(); }
     Result result() const { return (*functor)(); }
+    Result result(int ctx_id, int index) const {
+            return (*functor)(); } //Need to check this
     Result total() const { return (*functor)(); }
 };
 
@@ -687,6 +945,8 @@ class FunctorProxy<T,
     FunctorProxy(const T &func) : functor(func) {}
     Counter value() const { return functor(); }
     Result result() const { return functor(); }
+    Result result(int ctx_id, int index) const {
+            return functor(); } //Need to check this
     Result total() const { return functor(); }
 };
 
@@ -706,6 +966,8 @@ class MethodProxy : public ProxyInfo
     MethodProxy(T *obj, MethodPointer meth) : object(obj), method(meth) {}
     Counter value() const { return (object->*method)(); }
     Result result() const { return (object->*method)(); }
+    Result result(int ctx_id,int index) const {
+            return (object->*method)(); } //Need to check this
     Result total() const { return (object->*method)(); }
 };
 
@@ -771,6 +1033,8 @@ class ValueBase : public DataWrap<Derived, ScalarInfoProxy>
 
     Counter value() { return proxy->value(); }
     Result result() const { return proxy->result(); }
+    Result result(int ctx_id, int index) const {
+            return proxy->result(); } //Need to check this
     Result total() const { return proxy->total(); };
     size_type size() const { return proxy->size(); }
 
@@ -809,10 +1073,12 @@ class ScalarProxy
     Counter value() const { return stat.data(index)->value(); }
 
     /**
-     * Return the current value of this statas a result type.
+     * Return the current value of this stats a result type.
      * @return The current value.
      */
     Result result() const { return stat.data(index)->result(); }
+    Result result(int ctx_id, int region_id) const {
+            return stat.data(ctx_id, region_id, index)->result(); }
 
   public:
     /**
@@ -851,12 +1117,34 @@ class ScalarProxy
      * Increment the stat by 1. This calls the associated storage object inc
      * function.
      */
-    void operator++() { stat.data(index)->inc(1); }
+    void operator++() {
+            stat.data(index)->inc(1);
+            if (stat.data_ctx(index)){
+                stat.data_ctx(index)->inc(1);
+            }
+            if (stat.data_region(index)){
+                stat.data_region(index)->inc(1);
+            }
+            if (stat.data_ctx_region(index)){
+                stat.data_ctx_region(index)->inc(1);
+            }
+    }
     /**
      * Decrement the stat by 1. This calls the associated storage object dec
      * function.
      */
-    void operator--() { stat.data(index)->dec(1); }
+    void operator--() {
+            stat.data(index)->dec(1);
+            if (stat.data_ctx(index)){
+                stat.data_ctx(index)->dec(1);
+            }
+            if (stat.data_region(index)){
+               stat.data_region(index)->dec(1);
+            }
+            if (stat.data_ctx_region(index)){
+                stat.data_ctx_region(index)->dec(1);
+            }
+    }
 
     /** Increment the stat by 1. */
     void operator++(int) { ++*this; }
@@ -873,6 +1161,15 @@ class ScalarProxy
     operator=(const U &v)
     {
         stat.data(index)->set(v);
+        if (stat.data_ctx(index)){
+            stat.data_ctx(index)->set(v);
+        }
+        if (stat.data_region(index)){
+            stat.data_region(index)->set(v);
+        }
+        if (stat.data_ctx_region(index)){
+            stat.data_ctx_region(index)->set(v);
+        }
     }
 
     /**
@@ -885,6 +1182,15 @@ class ScalarProxy
     operator+=(const U &v)
     {
         stat.data(index)->inc(v);
+        if (stat.data_ctx(index)){
+            stat.data_ctx(index)->inc(v);
+        }
+        if (stat.data_region(index)){
+            stat.data_region(index)->inc(v);
+        }
+        if (stat.data_ctx_region(index)){
+            stat.data_ctx_region(index)->inc(v);
+        }
     }
 
     /**
@@ -897,6 +1203,22 @@ class ScalarProxy
     operator-=(const U &v)
     {
         stat.data(index)->dec(v);
+        if (stat.data_ctx(index)){
+            stat.data_ctx(index)->dec(v);
+        }
+        if (stat.data_region(index)){
+            stat.data_region(index)->dec(v);
+        }
+        if (stat.data_ctx_region(index)){
+            stat.data_ctx_region(index)->dec(v);
+        }
+    }
+    void updateProperty(int ctx_id, int region_id, double delta) {
+        stat.data(index)->inc(delta); //to update overall total
+        stat.data(ctx_id,0,index)->inc(delta);
+        stat.data(max_ctx,region_id,index)->inc(delta);
+        stat.data(ctx_id,region_id,index)->inc(delta);
+
     }
 
     /**
@@ -931,7 +1253,9 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
 
   protected:
     /** The storage of this stat. */
-    std::vector<Storage*> storage;
+    //std::vector<Storage*> storage;
+    std::vector<std::array<std::vector<Storage*>,MAX_REG>> storage;
+    ThreadContext* tc = nullptr;
 
   protected:
     /**
@@ -939,16 +1263,141 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
      * @param index The vector index to access.
      * @return The storage object at the given index.
      */
-    Storage *data(off_type index) { return storage[index]; }
+    Storage *
+    data(off_type index)
+    {
+        return storage[max_ctx][0][index];
+    }
+    Storage *
+    data(int ctx_id, int region_id, off_type index)
+    {
+        return storage[ctx_id][region_id][index];
+    }
+
 
     /**
      * Retrieve a const pointer to the storage.
      * @param index The vector index to access.
      * @return A const pointer to the storage object at the given index.
      */
-    const Storage *data(off_type index) const { return storage[index]; }
+    const Storage *
+    data(off_type index) const
+    {
+        return storage[max_ctx][0][index];
+    }
+    const Storage *
+    data(int ctx_id, int region_id, off_type index) const
+    {
+        return storage[ctx_id][region_id][index];
+    }
+
+    Storage *
+    data_ctx(off_type index) {
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && tc != nullptr) {
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (ctx_id < max_ctx){
+                return storage[ctx_id][0][index];
+            }
+        }
+        return NULL;
+    }
+
+    const Storage *
+    data_ctx(off_type index) const {
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && tc != nullptr) {
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (ctx_id < max_ctx){
+                return storage[ctx_id][0][index];
+            }
+        }
+        return NULL;
+    }
+
+    Storage *
+    data_region(off_type index) {
+        int region_id = 0;
+        if (IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            if (region_id > 0){
+                return storage[max_ctx][region_id][index];
+            }
+        }
+        return NULL;
+    }
+
+    const Storage *
+    data_region(off_type index) const {
+        int region_id = 0;
+        if (IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            if (region_id > 0){
+                return storage[max_ctx][region_id][index];
+            }
+        }
+        return NULL;
+    }
+
+    Storage *
+    data_ctx_region(off_type index) {
+        int region_id = 0;
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (region_id > 0 && ctx_id < max_ctx){
+                return storage[ctx_id][region_id][index];
+            }
+        }
+        return NULL;
+    }
+
+    const Storage *
+    data_ctx_region(off_type index) const {
+        int region_id = 0;
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (region_id > 0 && ctx_id < max_ctx){
+                return storage[ctx_id][region_id][index];
+            }
+        }
+        return NULL;
+    }
 
     void
+    doInit(size_type s)
+    {
+        fatal_if(s <= 0, "Storage size must be positive");
+        fatal_if(storage.size() != 0, "Stat has already been initialized");
+
+        //int max_regions = this->info()->maxRegions;
+        //unsigned maximum_ctx = this->info()->maxContexts;
+        storage.resize(MAX_CONTEXT);
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                storage[ctx_id][region_id].reserve(s);
+                for (size_type i = 0; i < s; ++i){
+                    storage[ctx_id][region_id].push_back(
+                        new Storage(this->info()->getStorageParams()));
+                }
+                this->setInit();
+            }
+        }
+    }
+
+
+   /* void
     doInit(size_type s)
     {
         fatal_if(s <= 0, "Storage size must be positive");
@@ -959,7 +1408,7 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
             storage.push_back(new Storage(this->info()->getStorageParams()));
 
         this->setInit();
-    }
+    }*/
 
   public:
     void
@@ -982,6 +1431,14 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
             vec[i] = data(i)->result();
     }
 
+    void
+    result_region(int ctx_id, int region_id, VResult &vec) const
+    {
+        vec.resize(size());
+        for (off_type i = 0; i < size(); ++i)
+            vec[i] = data(ctx_id,region_id,i)->result();
+    }
+
     /**
      * Return a total of all entries in this vector.
      * @return The total of all vector entries.
@@ -995,10 +1452,24 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
         return total;
     }
 
+    Result
+    total_region(int ctx_id, int region_id) const
+    {
+        Result total = 0.0;
+        for (off_type i = 0; i < size(); ++i)
+            total += data(ctx_id,region_id,i)->result();
+        return total;
+    }
+
     /**
      * @return the number of elements in this vector.
      */
-    size_type size() const { return storage.size(); }
+    size_type size() const {
+            if (storage.size())
+                return storage[max_ctx][0].size();
+
+            return storage.size();
+    }
 
     bool
     zero() const
@@ -1007,6 +1478,19 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
             if (data(i)->zero())
                 return false;
         return true;
+    }
+    void
+    reset()
+    {
+        Info *info = this->info();
+        size_type size = this->size();
+         for (int ctx_id = 0; ctx_id < MAX_CONTEXT; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                for (off_type i = 0; i < size; ++i){
+                    data(ctx_id,region_id,i)->reset(info->getStorageParams());
+                }
+            }
+         }
     }
 
     bool
@@ -1025,10 +1509,20 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
 
     ~VectorBase()
     {
+        for (auto& ctx : storage) {
+            for (auto& reg : ctx){
+                    for (auto& stor: reg)
+                        delete stor;
+            }
+        }
+    }
+/*
+    ~VectorBase()
+    {
         for (auto& stor : storage) {
             delete stor;
         }
-    }
+    }*/
 
     /**
      * Set this vector to have the given size.
@@ -1148,11 +1642,100 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
   protected:
     size_type x;
     size_type y;
-    std::vector<Storage*> storage;
+    //std::vector<Storage*> storage;
+    std::vector<std::array<std::vector<Storage*>,MAX_REG>> storage;
+    ThreadContext* tc = nullptr;
 
   protected:
-    Storage *data(off_type index) { return storage[index]; }
-    const Storage *data(off_type index) const { return storage[index]; }
+    Storage *data(off_type index) {
+        return storage[max_ctx][0][index];
+    }
+
+    const Storage *data(off_type index) const {
+        return storage[max_ctx][0][index];
+    }
+
+    Storage *data(int ctx_id, int region_id, off_type index) {
+        return storage[ctx_id][region_id][index];
+    }
+
+    const Storage *data(int ctx_id, int region_id, off_type index) const {
+        return storage[ctx_id][region_id][index];
+    }
+
+    Storage *data_ctx(off_type index) {
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && tc != nullptr) {
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (ctx_id < max_ctx){
+                return storage[ctx_id][0][index];
+            }
+        }
+        return NULL;
+    }
+    const Storage *data_ctx(off_type index) const {
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && tc != nullptr) {
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (ctx_id < max_ctx){
+                return storage[ctx_id][0][index];
+            }
+        }
+        return NULL;
+    }
+
+    Storage *data_region(off_type index) {
+        int region_id = 0;
+        if (IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            if (region_id > 0){
+                return storage[max_ctx][region_id][index];
+            }
+        }
+        return NULL;
+    }
+    const Storage *data_region(off_type index) const {
+        int region_id = 0;
+        if (IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            if (region_id > 0){
+                return storage[max_ctx][region_id][index];
+            }
+        }
+        return NULL;
+    }
+    Storage *data_ctx_region(off_type index) {
+        int region_id = 0;
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (region_id > 0 && ctx_id < max_ctx){
+                return storage[ctx_id][region_id][index];
+            }
+        }
+        return NULL;
+    }
+    const Storage *data_ctx_region(off_type index) const {
+        int region_id = 0;
+        int ctx_id = max_ctx+1;
+        if (IS_CTX && IS_REG && tc != nullptr) {
+            region_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CurrReg);
+            ctx_id = (int)tc->readMiscRegNoEffect(
+                            gem5::X86ISA::misc_reg::CtxReg);
+            if (region_id > 0 && ctx_id < max_ctx){
+                return storage[ctx_id][region_id][index];
+            }
+        }
+        return NULL;
+    }
 
   public:
     Vector2dBase(Group *parent, const char *name,
@@ -1161,13 +1744,25 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
         : DataWrapVec2d<Derived, Vector2dInfoProxy>(parent, name, unit, desc),
           x(0), y(0), storage()
     {}
-
+/*
     ~Vector2dBase()
     {
         for (auto& stor : storage) {
             delete stor;
         }
+    }*/
+
+    ~Vector2dBase()
+    {
+        for (auto& ctx : storage) {
+            for (auto& reg : ctx){
+                for (auto& stor: reg){
+                    delete stor;
+                }
+            }
+        }
     }
+
 
     Derived &
     init(size_type _x, size_type _y)
@@ -1183,12 +1778,17 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
         info->x = _x;
         info->y = _y;
 
-        storage.reserve(x * y);
-        for (size_type i = 0; i < x * y; ++i)
-            storage.push_back(new Storage(this->info()->getStorageParams()));
-
-        this->setInit();
-
+        storage.resize(MAX_CONTEXT);
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                storage[ctx_id][region_id].reserve(x * y);
+                for (size_type i = 0; i < x * y; ++i){
+                    storage[ctx_id][region_id].push_back(
+                        new Storage(this->info()->getStorageParams()));
+                }
+                this->setInit();
+            }
+        }
         return self;
     }
 
@@ -1200,10 +1800,11 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
         return Proxy(this->self(), offset, y);
     }
 
-
     size_type
     size() const
     {
+        if (storage.size())
+            return storage[max_ctx][0].size();
         return storage.size();
     }
 
@@ -1231,9 +1832,14 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
     {
         Info *info = this->info();
         size_type size = this->size();
-
-        for (off_type i = 0; i < size; ++i)
-            data(i)->prepare(info->getStorageParams());
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                for (off_type i = 0; i < size; ++i){
+                    data(ctx_id,region_id,i)->prepare(
+                                    info->getStorageParams());
+                }
+            }
+        }
 
         info->cvec.resize(size);
         for (off_type i = 0; i < size; ++i)
@@ -1248,9 +1854,24 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
     {
         Info *info = this->info();
         size_type size = this->size();
+        for (int ctx_id = 0; ctx_id < MAX_CONTEXT; ctx_id++){
+            for (int region_id = 0; region_id < MAX_REG; region_id++) {
+                for (off_type i = 0; i < size; ++i){
+                    data(ctx_id,region_id,i)->reset(info->getStorageParams());
+                }
+            }
+        }
+    }
+/*
+    void
+    reset()
+    {
+        Info *info = this->info();
+        size_type size = this->size();
         for (off_type i = 0; i < size; ++i)
             data(i)->reset(info->getStorageParams());
-    }
+    }*/
+
 
     bool
     check() const
@@ -1948,6 +2569,31 @@ class Scalar : public ScalarBase<Scalar, StatStor>
         : ScalarBase<Scalar, StatStor>(parent, name, unit, desc)
     {
     }
+    Scalar(Group *parent, const char *name, const units::Base *unit,
+           int enable = 0,const char *desc = nullptr)
+        : ScalarBase<Scalar, StatStor>(parent, name, unit, desc)
+    {
+            assert(this->info() != nullptr);
+            assert(max_reg < MAX_REG);
+            //std::cout<<"max_ctx: "<<max_ctx<<std::endl;
+            assert(max_ctx < MAX_CONTEXT);
+            this->info()->setMaxRegions(max_reg);
+            this->info()->setMaxContexts(max_ctx);
+            this->info()->setregenable(enable);
+    }
+    Scalar(Group *parent, const char *name,const units::Base *unit,
+                    ThreadContext *tcp = nullptr, const char *desc = nullptr)
+        : ScalarBase<Scalar, StatStor>(parent, name, unit, desc)
+    {
+            assert(this->info() != nullptr);
+            this->tc = tcp;
+            assert(max_reg < MAX_REG);
+            this->info()->setMaxRegions(max_reg);
+            assert(max_ctx < MAX_CONTEXT);
+            this->info()->setMaxContexts(max_ctx);
+            this->info()->setregenable(1);
+    }
+
 };
 
 /**
@@ -2021,6 +2667,31 @@ class Vector : public VectorBase<Vector, StatStor>
            const char *desc = nullptr)
         : VectorBase<Vector, StatStor>(parent, name, unit, desc)
     {
+    }
+
+    Vector(Group *parent, const char *name, const units::Base *unit,
+                    int enable = 0, const char *desc = nullptr)
+        : VectorBase<Vector, StatStor>(parent, name, unit, desc)
+    {
+        assert(this->info() != nullptr);
+        assert(max_ctx < MAX_CONTEXT);
+        assert(max_reg < MAX_REG);
+        this->info()->setMaxRegions(max_reg);
+        this->info()->setMaxContexts(max_ctx);
+        this->info()->setregenable(enable);
+    }
+
+    Vector(Group *parent, const char *name, const units::Base *unit,
+                    ThreadContext *tcp = nullptr, const char *desc = nullptr)
+        : VectorBase<Vector, StatStor>(parent, name, unit, desc)
+    {
+        assert(this->info() != nullptr);
+        assert(max_ctx < MAX_CONTEXT);
+        assert(max_reg < MAX_REG);
+        this->tc = tcp;
+        this->info()->setMaxRegions(max_reg);
+        this->info()->setMaxContexts(max_ctx);
+        this->info()->setregenable(1);
     }
 };
 
@@ -2389,7 +3060,16 @@ class FormulaInfoProxy : public InfoProxy<Stat, FormulaInfo>
         this->s.result(vec);
         return vec;
     }
+    const VResult &
+    result_region(int ctx_id, int region_id) const
+    {
+        this->s.result(vec); //yet to update base
+        return vec;
+    }
+
     Result total() const { return this->s.total(); }
+    Result total_region(int ctx_id, int region_id) const {
+            return this->s.total(); } //yet to update base
     VCounter &value() const { return cvec; }
 
     std::string str() const { return this->s.str(); }

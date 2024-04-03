@@ -48,11 +48,15 @@ from gem5.components.processors.simple_switchable_processor import (
     SimpleSwitchableProcessor,
 )
 from gem5.isas import ISA
-from gem5.resources.resource import obtain_resource,KernelResource,DiskImageResource,Resource
+from gem5.resources.resource import (
+    DiskImageResource,
+    KernelResource,
+    Resource,
+    obtain_resource,
+)
 from gem5.simulate.exit_event import ExitEvent
 from gem5.simulate.simulator import Simulator
 from gem5.utils.requires import requires
-
 
 # This runs a check to ensure the gem5 binary is compiled to X86 and to the
 # MESI Two Level coherence protocol.
@@ -62,25 +66,27 @@ requires(
     kvm_required=True,
 )
 
+from gem5.components.cachehierarchies.classic.private_l1_private_l2_shared_l3_cache_hierarchy import (
+    PrivateL1PrivateL2L3CacheHierarchy,
+)
 from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
     MESITwoLevelCacheHierarchy,
 )
 
-from gem5.components.cachehierarchies.classic.private_l1_private_l2_shared_l3_cache_hierarchy import(
-    PrivateL1PrivateL2L3CacheHierarchy
-)
 # Here we setup a MESI Two Level Cache Hierarchy.
-#cache_hierarchy = MESITwoLevelCacheHierarchy(
- #   l1d_size="16kB",
-  #  l1d_assoc=8,
-   # l1i_size="16kB",
-    #l1i_assoc=8,
-    #l2_size="256kB",
-    #l2_assoc=16,
-    #num_l2_banks=1,
-#)
+# cache_hierarchy = MESITwoLevelCacheHierarchy(
+#   l1d_size="16kB",
+#  l1d_assoc=8,
+# l1i_size="16kB",
+# l1i_assoc=8,
+# l2_size="256kB",
+# l2_assoc=16,
+# num_l2_banks=1,
+# )
 
-cache_hierarchy = PrivateL1PrivateL2L3CacheHierarchy(l1d_size="32kB",l1i_size="32kB",l2_size="1MB",l3_size="8MB")
+cache_hierarchy = PrivateL1PrivateL2L3CacheHierarchy(
+    l1d_size="32kB", l1i_size="32kB", l2_size="1MB", l3_size="8MB"
+)
 
 # Setup the system memory.
 memory = SingleChannelDDR3_1600(size="3GB")
@@ -116,8 +122,8 @@ board = X86Board(
 # then, again, call `m5 exit` to terminate the simulation. After simulation
 # has ended you may inspect `m5out/system.pc.com_1.device` to see the echo
 # output.
-#"cd /home/gem5/vSwarm/benchmarks/aes;"
-#+"docker compose -f yamls/docker-compose/dc-aes-python.yaml up -d;"
+# "cd /home/gem5/vSwarm/benchmarks/aes;"
+# +"docker compose -f yamls/docker-compose/dc-aes-python.yaml up -d;"
 """
 command = (
     "cd /home/gem5/vSwarm/benchmarks/auth;"
@@ -132,17 +138,30 @@ command = (
 """
 command = (
     "sleep 20;"
-    "m5 exit;"
-    + "echo 'This is running on Timing CPU cores.';"
+    + "m5 exit;"
+    + "echo 1024 > /sys/kernel/mm/ksm/pages_to_scan;"
+    + "echo 100 > /sys/kernel/mm/ksm/sleep_millisecs;"
+    + "echo 0 > /sys/kernel/mm/ksm/run;"
+    + "cd /home/gem5;"
+    + "./pthread_ksm 50 20 80 200;"
     + "sleep 1;"
     + "m5 exit;"
 )
 
-#workload = obtain_resource("x86-ubuntu-18.04-boot")
-#print(workload)
-#workload.set_parameter("readfile_contents", command)
-#board.set_workload(workload)
-board.set_kernel_disk_workload(kernel=KernelResource("/home/kparun/Kuiet/gem5stats/gem5/fullsystem_images/vmlinux-vanilla"),disk_image=DiskImageResource("/home/kparun/stack_persistence/gem5-resources/src/x86-ubuntu/disk-image/x86-ubuntu/x86-ubuntu-image/x86-ubuntu",root_partition="1") ,readfile_contents=command)
+# workload = obtain_resource("x86-ubuntu-18.04-boot")
+# print(workload)
+# workload.set_parameter("readfile_contents", command)
+# board.set_workload(workload)
+board.set_kernel_disk_workload(
+    kernel=KernelResource(
+        "/home/kparun/Kuiet/gem5stats/gem5/fullsystem_images/vmlinux-vanilla"
+    ),
+    disk_image=DiskImageResource(
+        "/home/kparun/stack_persistence/gem5-resources/src/x86-ubuntu/disk-image/x86-ubuntu/x86-ubuntu-image/x86-ubuntu",
+        root_partition="1",
+    ),
+    readfile_contents=command,
+)
 
 simulator = Simulator(
     board=board,

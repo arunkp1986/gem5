@@ -407,7 +407,7 @@ BaseCPU::probeInstCommit(const StaticInstPtr &inst, Addr pc)
 BaseCPU::
 BaseCPUStats::BaseCPUStats(statistics::Group *parent)
     : statistics::Group(parent),
-      ADD_STAT(numCycles, statistics::units::Cycle::get(),
+      ADD_STAT(numCycles, statistics::units::Cycle::get(),1,
                "Number of cpu cycles simulated"),
       ADD_STAT(cpi, statistics::units::Rate<
                 statistics::units::Cycle, statistics::units::Count>::get(),

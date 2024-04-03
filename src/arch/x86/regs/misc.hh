@@ -401,6 +401,9 @@ enum : RegIndex
     //XXX Add "Model-Specific Registers"
 
     ApicBase,
+    CurrReg,
+    MaxReg,
+    CtxReg,
 
     // "Fake" MSRs for internally implemented devices
     PciConfigAddress,

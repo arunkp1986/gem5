@@ -199,6 +199,8 @@ class BaseSimpleCPU : public BaseCPU
      */
     virtual Fault initiateMemMgmtCmd(Request::Flags flags) = 0;
 
+    int getActiveRegionId() const;
+    int getActiveCtxId() const;
 };
 
 } // namespace gem5

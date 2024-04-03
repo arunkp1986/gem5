@@ -122,3 +122,4 @@ DebugFormatFlag('FmtFlag',
 DebugFormatFlag('FmtStackTrace',
     "Print a stack trace after every debug message")
 DebugFormatFlag('FmtTicksOff', "Don't show tick count on debug messages")
+SimObject('StatisticsBase.py', sim_objects=['StatisticsBase'])

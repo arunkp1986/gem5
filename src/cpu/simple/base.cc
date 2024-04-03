@@ -42,6 +42,7 @@
 #include "cpu/simple/base.hh"
 
 #include "arch/generic/decoder.hh"
+#include "arch/x86/regs/misc.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
 #include "base/loader/symtab.hh"
@@ -526,6 +527,23 @@ BaseSimpleCPU::advancePC(const Fault &fault)
             ++t_info.execContextStats.numBranchMispred;
         }
     }
+}
+
+int
+BaseSimpleCPU::getActiveRegionId() const
+{
+    SimpleThread* tcp = threadInfo[curThread]->thread;
+    int region_id = (int)tcp->readMiscRegNoEffect(
+                    gem5::X86ISA::misc_reg::CurrReg);
+    return region_id;
+}
+int
+BaseSimpleCPU::getActiveCtxId() const
+{
+    SimpleThread* tcp = threadInfo[curThread]->thread;
+    int ctx_id = (int)tcp->readMiscRegNoEffect(
+                    gem5::X86ISA::misc_reg::CtxReg);
+    return ctx_id;
 }
 
 } // namespace gem5

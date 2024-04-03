@@ -81,6 +81,12 @@ class Info
   public:
     /** The name of the stat. */
     std::string name;
+    /** Maximum regions allowed for this stat. */
+    int maxRegions;
+    /** Maximum contexts allowed for this stat. */
+    int maxContexts;
+    /** Is region enabled*/
+    int reg_enable;
     /** The separator string used for vectors, dist, etc. */
     static std::string separatorString;
     /** The unit of the stat. */
@@ -117,6 +123,10 @@ class Info
     void setName(const std::string &name, bool old_style=true);
 
     void setSeparator(std::string _sep) { separatorString = _sep;}
+
+    void setMaxRegions(int regions) { maxRegions = regions; }
+    void setMaxContexts(int ctx_id) { maxContexts = ctx_id; }
+    void setregenable(int enable) { reg_enable = enable; }
 
     /**
      * Getter for the storage params. These parameters should only be modified
@@ -177,6 +187,7 @@ class ScalarInfo : public Info
   public:
     virtual Counter value() const = 0;
     virtual Result result() const = 0;
+    virtual Result result(int ctx_id,int region_id) const = 0;
     virtual Result total() const = 0;
 };
 
@@ -194,7 +205,9 @@ class VectorInfo : public Info
     virtual size_type size() const = 0;
     virtual const VCounter &value() const = 0;
     virtual const VResult &result() const = 0;
+    virtual const VResult &result_region(int ctx_id,int region_id) const = 0;
     virtual Result total() const = 0;
+    virtual Result total_region(int ctx_id, int region_id) const = 0;
 };
 
 class DistInfo : public Info

@@ -56,6 +56,9 @@ namespace gem5
 namespace statistics
 {
 
+unsigned max_ctx = 0;
+unsigned max_reg = 0;
+
 // We wrap these in a function to make sure they're built in time.
 std::list<Info *> &
 statsList()
