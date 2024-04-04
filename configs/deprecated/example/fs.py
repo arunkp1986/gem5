@@ -314,6 +314,7 @@ def build_drive_system(np):
 
     # Create the appropriate memory controllers and connect them to the
     # memory bus
+    print(drive_sys.mem_ranges)
     drive_sys.mem_ctrls = [
         DriveMemClass(range=r) for r in drive_sys.mem_ranges
     ]
@@ -403,6 +404,7 @@ elif len(bm) == 1 and args.dist:
         args.etherdump,
     )
 elif len(bm) == 1:
+    print("here---------")
     root = Root(full_system=True, system=test_sys)
 else:
     print("Error I don't know how to create more than 2 systems.")

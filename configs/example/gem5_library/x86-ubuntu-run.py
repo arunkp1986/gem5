@@ -45,8 +45,16 @@ scons build/X86/gem5.opt
 """
 
 from gem5.prebuilt.demo.x86_demo_board import X86DemoBoard
-from gem5.resources.resource import obtain_resource
+from gem5.resources.resource import (
+    DiskImageResource,
+    KernelResource,
+    Resource,
+    obtain_resource,
+)
 from gem5.simulate.simulator import Simulator
+
+# from gem5.resources.resource import obtain_resource
+
 
 # Here we setup the board. The prebuilt X86DemoBoard allows for Full-System X86
 # simulation.
@@ -55,7 +63,18 @@ board = X86DemoBoard()
 # We then set the workload. Here we use the "x86-ubuntu-18.04-boot" workload.
 # This boots Ubuntu 18.04 with Linux 5.4.49. If the required resources are not
 # found locally, they will be downloaded.
-board.set_workload(obtain_resource("x86-ubuntu-18.04-boot"))
+# board.set_workload(obtain_resource("x86-ubuntu-18.04-boot"))
+
+board.set_kernel_disk_workload(
+    kernel=KernelResource(
+        "/home/kparun/Kuiet/gem5stats/test/gemOS/src/gemOS.kernel"
+    ),
+    disk_image=DiskImageResource(
+        "/home/kparun/stack_persistence/gem5/fullsystem_images/gemos.img",
+        root_partition="1",
+    ),
+    # readfile_contents=command,
+)
 
 simulator = Simulator(board=board)
 simulator.run()

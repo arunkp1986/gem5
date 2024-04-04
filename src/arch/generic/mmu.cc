@@ -111,6 +111,10 @@ void
 BaseMMU::translateTiming(const RequestPtr &req, ThreadContext *tc,
                          BaseMMU::Translation *translation, BaseMMU::Mode mode)
 {
+    //std::cout<<"translateTiming: "<<mode<<std::endl;
+    //BaseTLB* temp = getTlb(mode);
+    //std::cout<<"translateTiming: "<<mode<<std::endl;
+    //return temp->translateTiming(req, tc, translation, mode);
     return getTlb(mode)->translateTiming(req, tc, translation, mode);
 }
 

@@ -543,7 +543,8 @@ def makeX86System(mem_mode, numCPUs=1, mdesc=None, workload=None, Ruby=False):
             AddrRange("3GB"),
             AddrRange(Addr("4GB"), size=excess_mem_size),
         ]
-
+    # print(self.mem_ranges)
+    # [print(r.size()) for r in self.mem_ranges]
     # Platform
     self.pc = Pc()
 

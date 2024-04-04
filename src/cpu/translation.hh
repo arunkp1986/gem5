@@ -254,6 +254,8 @@ class DataTranslation : public BaseMMU::Translation
            BaseMMU::Mode mode)
     {
         assert(state);
+        //std::cout<<mode<<std::endl;
+        //std::cout<<state->mode<<std::endl;
         assert(mode == state->mode);
         if (state->finish(fault, index)) {
             if (state->getFault() == NoFault) {
