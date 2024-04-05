@@ -89,7 +89,7 @@ from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import
 # )
 
 cache_hierarchy = PrivateL1PrivateL2L3CacheHierarchy(
-    l1d_size="32kB", l1i_size="32kB", l2_size="1MB", l3_size="8MB"
+    l1d_size="32kB", l1i_size="32kB", l2_size="512kB", l3_size="2MB"
 )
 
 # Setup the system memory.

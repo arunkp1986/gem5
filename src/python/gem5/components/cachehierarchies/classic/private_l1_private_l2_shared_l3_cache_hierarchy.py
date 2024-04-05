@@ -99,7 +99,7 @@ class PrivateL1PrivateL2L3CacheHierarchy(
             l1d_size=l1d_size,
             l1d_assoc=8,
             l2_size=l2_size,
-            l2_assoc=4,
+            l2_assoc=16,
             l3_size=l3_size,
             l3_assoc=16,
         )
@@ -152,7 +152,10 @@ class PrivateL1PrivateL2L3CacheHierarchy(
             self._setup_io_cache(board)
 
         self.l3bus = L2XBar()
-        self.l3cache = L3Cache(size=self._l3_size)
+        self.l3cache = L3Cache(
+            size=self._l3_size * (board.get_processor().get_num_cores()),
+            mshrs=64 * (board.get_processor().get_num_cores()),
+        )
         for i, cpu in enumerate(board.get_processor().get_cores()):
             cpu.connect_icache(self.l1icaches[i].cpu_side)
             cpu.connect_dcache(self.l1dcaches[i].cpu_side)
