@@ -2576,6 +2576,7 @@ class Scalar : public ScalarBase<Scalar, StatStor>
             assert(this->info() != nullptr);
             assert(max_reg < MAX_REG);
             //std::cout<<"max_ctx: "<<max_ctx<<std::endl;
+            //std::cout<<"max_reg: "<<max_reg<<std::endl;
             assert(max_ctx < MAX_CONTEXT);
             this->info()->setMaxRegions(max_reg);
             this->info()->setMaxContexts(max_ctx);

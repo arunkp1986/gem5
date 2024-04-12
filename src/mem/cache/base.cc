@@ -2035,9 +2035,9 @@ BaseCache::unserialize(CheckpointIn &cp)
 BaseCache::CacheCmdStats::CacheCmdStats(BaseCache &c,
                                         const std::string &name)
     : statistics::Group(&c, name.c_str()), cache(c),
-      ADD_STAT(hits, statistics::units::Count::get(),
+      ADD_STAT(hits, statistics::units::Count::get(),1,
                ("number of " + name + " hits").c_str()),
-      ADD_STAT(misses, statistics::units::Count::get(),
+      ADD_STAT(misses, statistics::units::Count::get(),1,
                ("number of " + name + " misses").c_str()),
       ADD_STAT(hitLatency, statistics::units::Tick::get(),
                ("number of " + name + " hit ticks").c_str()),

@@ -33,7 +33,10 @@ from typing import (
     Optional,
 )
 
-from m5.objects import SubSystem
+from m5.objects import (
+    StatisticsBase,
+    SubSystem,
+)
 
 from ...isas import ISA
 from ...utils.requires import requires
@@ -56,6 +59,7 @@ class AbstractProcessor(SubSystem):
         """
         super().__init__()
 
+        self.statsbase = StatisticsBase(max_context=4, max_region=4)
         if cores:
             # In the stdlib we assume the system processor conforms to a single
             # ISA target.

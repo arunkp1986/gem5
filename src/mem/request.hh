@@ -421,6 +421,9 @@ class Request : public Extensible<Request>
      */
     uint32_t _taskId = context_switch_task_id::Unknown;
 
+    int _regionId = 0;
+    int _ctxId = 0;
+
     /**
      * The stream ID uniquely identifies a device behind the
      * SMMU/IOMMU Each transaction arriving at the SMMU/IOMMU is
@@ -510,7 +513,10 @@ class Request : public Extensible<Request>
           _cacheCoherenceFlags(other._cacheCoherenceFlags),
           privateFlags(other.privateFlags),
           _time(other._time),
-          _taskId(other._taskId), _vaddr(other._vaddr),
+          _taskId(other._taskId),
+          _regionId(other._regionId),
+          _ctxId(other._ctxId),
+          _vaddr(other._vaddr),
           _extraData(other._extraData), _contextId(other._contextId),
           _pc(other._pc), _reqInstSeqNum(other._reqInstSeqNum),
           _localAccessor(other._localAccessor),
@@ -866,6 +872,30 @@ class Request : public Extensible<Request>
     void
     taskId(uint32_t id) {
         _taskId = id;
+    }
+
+    int
+    regionId() const
+    {
+        return _regionId;
+    }
+
+    void
+    regionId(int regionId)
+    {
+        _regionId = regionId;
+    }
+
+    int
+    ctxId() const
+    {
+        return _ctxId;
+    }
+
+    void
+    ctxId(int ctxId)
+    {
+        _ctxId = ctxId;
     }
 
     /** Accessor function for architecture-specific flags.*/

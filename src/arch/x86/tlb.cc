@@ -419,18 +419,38 @@ TLB::translate(const RequestPtr &req,
             TlbEntry *entry = lookup(pageAlignedVaddr);
 
             if (mode == BaseMMU::Read) {
-                stats.rdAccesses++;
+                //stats.rdAccesses++;
+                int ctx_id = (int)tc->readMiscRegNoEffect(
+                                gem5::X86ISA::misc_reg::CtxReg);
+                int region_id = (int)tc->readMiscRegNoEffect(
+                                gem5::X86ISA::misc_reg::CurrReg);
+                stats.rdAccesses.updateProperty(ctx_id,region_id,1);
             } else {
-                stats.wrAccesses++;
+                //stats.wrAccesses++;
+                int ctx_id = (int)tc->readMiscRegNoEffect(
+                                gem5::X86ISA::misc_reg::CtxReg);
+                int region_id = (int)tc->readMiscRegNoEffect(
+                                gem5::X86ISA::misc_reg::CurrReg);
+                stats.wrAccesses.updateProperty(ctx_id,region_id,1);
             }
             if (!entry) {
                 DPRINTF(TLB, "Handling a TLB miss for "
                         "address %#x at pc %#x.\n",
                         vaddr, tc->pcState().instAddr());
                 if (mode == BaseMMU::Read) {
-                    stats.rdMisses++;
+                    //stats.rdMisses++;
+                    int ctx_id = (int)tc->readMiscRegNoEffect(
+                                    gem5::X86ISA::misc_reg::CtxReg);
+                    int region_id = (int)tc->readMiscRegNoEffect(
+                                    gem5::X86ISA::misc_reg::CurrReg);
+                    stats.rdMisses.updateProperty(ctx_id,region_id,1);
                 } else {
-                    stats.wrMisses++;
+                    //stats.wrMisses++;
+                    int ctx_id = (int)tc->readMiscRegNoEffect(
+                                    gem5::X86ISA::misc_reg::CtxReg);
+                    int region_id = (int)tc->readMiscRegNoEffect(
+                                    gem5::X86ISA::misc_reg::CurrReg);
+                    stats.wrMisses.updateProperty(ctx_id,region_id,1);
                 }
                 if (FullSystem) {
                     Fault fault = walker->start(tc, translation, req, mode);
@@ -560,8 +580,8 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
     bool delayedResponse;
     assert(translation);
     // CLFLUSHOPT/WB/FLUSH should be treated as read for protection checks
-    if (req->isCacheClean())
-        mode = BaseMMU::Read;
+    //if (req->isCacheClean())
+        //mode = BaseMMU::Read;
     Fault fault =
         TLB::translate(req, tc, translation, mode, delayedResponse, true);
     if (!delayedResponse)
@@ -579,13 +599,13 @@ TLB::getWalker()
 TLB::TlbStats::TlbStats(statistics::Group *parent)
   : statistics::Group(parent),
     ADD_STAT(rdAccesses, statistics::units::Count::get(),
-             "TLB accesses on read requests"),
+             1,"TLB accesses on read requests"),
     ADD_STAT(wrAccesses, statistics::units::Count::get(),
-             "TLB accesses on write requests"),
+             1,"TLB accesses on write requests"),
     ADD_STAT(rdMisses, statistics::units::Count::get(),
-             "TLB misses on read requests"),
+             1,"TLB misses on read requests"),
     ADD_STAT(wrMisses, statistics::units::Count::get(),
-             "TLB misses on write requests")
+             1,"TLB misses on write requests")
 {
 }
 

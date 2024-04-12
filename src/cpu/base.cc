@@ -865,7 +865,7 @@ BaseCPU::GlobalStats::GlobalStats(statistics::Group *parent)
 BaseCPU::
 FetchCPUStats::FetchCPUStats(statistics::Group *parent, int thread_id)
     : statistics::Group(parent, csprintf("fetchStats%i", thread_id).c_str()),
-    ADD_STAT(numInsts, statistics::units::Count::get(),
+    ADD_STAT(numInsts, statistics::units::Count::get(),1,
              "Number of instructions fetched (thread level)"),
     ADD_STAT(numOps, statistics::units::Count::get(),
              "Number of ops (including micro ops) fetched (thread level)"),
@@ -900,7 +900,7 @@ FetchCPUStats::FetchCPUStats(statistics::Group *parent, int thread_id)
 BaseCPU::
 ExecuteCPUStats::ExecuteCPUStats(statistics::Group *parent, int thread_id)
     : statistics::Group(parent, csprintf("executeStats%i", thread_id).c_str()),
-    ADD_STAT(numInsts, statistics::units::Count::get(),
+    ADD_STAT(numInsts, statistics::units::Count::get(),1,
              "Number of executed instructions"),
     ADD_STAT(numNop, statistics::units::Count::get(),
              "Number of nop insts executed"),
@@ -988,7 +988,7 @@ ExecuteCPUStats::ExecuteCPUStats(statistics::Group *parent, int thread_id)
 BaseCPU::
 CommitCPUStats::CommitCPUStats(statistics::Group *parent, int thread_id)
     : statistics::Group(parent, csprintf("commitStats%i", thread_id).c_str()),
-    ADD_STAT(numInsts, statistics::units::Count::get(),
+    ADD_STAT(numInsts, statistics::units::Count::get(),1,
              "Number of instructions committed (thread level)"),
     ADD_STAT(numOps, statistics::units::Count::get(),
              "Number of ops (including micro ops) committed (thread level)"),

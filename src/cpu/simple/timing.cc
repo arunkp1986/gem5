@@ -302,6 +302,9 @@ TimingSimpleCPU::sendData(const RequestPtr &req, uint8_t *data, uint64_t *res,
 
     PacketPtr pkt = buildPacket(req, read);
     pkt->dataDynamic<uint8_t>(data);
+    //setting region and context information with request: Arun
+    req->regionId(getActiveRegionId());
+    req->ctxId(getActiveCtxId());
 
     // hardware transactional memory
     // If the core is in transactional mode or if the request is HtmCMD
@@ -468,6 +471,8 @@ TimingSimpleCPU::initiateMemRead(Addr addr, unsigned size,
     req->setByteEnable(byte_enable);
 
     req->taskId(taskId());
+    req->regionId(getActiveRegionId());
+    req->ctxId(getActiveCtxId());
 
     Addr split_addr = roundDown(addr + size - 1, block_size);
     assert(split_addr <= addr || split_addr - addr < block_size);
@@ -550,6 +555,8 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
     req->setByteEnable(byte_enable);
 
     req->taskId(taskId());
+    req->regionId(getActiveRegionId());
+    req->ctxId(getActiveCtxId());
 
     Addr split_addr = roundDown(addr + size - 1, block_size);
     assert(split_addr <= addr || split_addr - addr < block_size);
@@ -608,6 +615,8 @@ TimingSimpleCPU::initiateMemAMO(Addr addr, unsigned size,
     assert(req->hasAtomicOpFunctor());
 
     req->taskId(taskId());
+    req->regionId(getActiveRegionId());
+    req->ctxId(getActiveCtxId());
 
     Addr split_addr = roundDown(addr + size - 1, block_size);
 
@@ -700,6 +709,8 @@ TimingSimpleCPU::fetch()
         _status = BaseSimpleCPU::Running;
         RequestPtr ifetch_req = std::make_shared<Request>();
         ifetch_req->taskId(taskId());
+        ifetch_req->regionId(getActiveRegionId());
+        ifetch_req->ctxId(getActiveCtxId());
         ifetch_req->setContext(thread->contextId());
         setupFetchRequest(ifetch_req);
         DPRINTF(SimpleCPU, "Translating address %#x\n", ifetch_req->getVaddr());
@@ -1253,6 +1264,8 @@ TimingSimpleCPU::initiateMemMgmtCmd(Request::Flags flags)
     req->setPC(pc);
     req->setContext(thread->contextId());
     req->taskId(taskId());
+    req->regionId(getActiveRegionId());
+    req->ctxId(getActiveCtxId());
     req->setInstCount(t_info.numInst);
 
     assert(req->isHTMCmd() || req->isTlbiCmd());
@@ -1308,6 +1321,8 @@ TimingSimpleCPU::htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
     req->setPC(pc);
     req->setContext(thread->contextId());
     req->taskId(taskId());
+    req->regionId(getActiveRegionId());
+    req->ctxId(getActiveCtxId());
     req->setInstCount(t_info.numInst);
     req->setHtmAbortCause(cause);
 

@@ -66,7 +66,7 @@ ThreadState::ThreadStateStats::ThreadStateStats(BaseCPU *cpu,
                                                 const ThreadID& tid)
       : statistics::Group(cpu, csprintf("thread_%i", tid).c_str()),
       ADD_STAT(numInsts, statistics::units::Count::get(),
-               cpu->getContext(tid),"Number of Instructions committed"),
+               "Number of Instructions committed"),
       ADD_STAT(numOps, statistics::units::Count::get(),
         "Number of Ops committed"),
       ADD_STAT(numMemRefs, statistics::units::Count::get(),

@@ -37,8 +37,10 @@ from ....isas import ISA
 from ....utils.override import *
 from ...boards.abstract_board import AbstractBoard
 from ..abstract_cache_hierarchy import AbstractCacheHierarchy
+from ..abstract_three_level_cache_hierarchy import (
+    AbstractThreeLevelCacheHierarchy,
+)
 from ..abstract_two_level_cache_hierarchy import AbstractTwoLevelCacheHierarchy
-from ..abstract_three_level_cache_hierarchy import AbstractThreeLevelCacheHierarchy
 from .abstract_classic_cache_hierarchy import AbstractClassicCacheHierarchy
 from .caches.l1dcache import L1DCache
 from .caches.l1icache import L1ICache
@@ -97,9 +99,9 @@ class PrivateL1PrivateL2L3CacheHierarchy(
             l1d_size=l1d_size,
             l1d_assoc=8,
             l2_size=l2_size,
-            l2_assoc=4,
+            l2_assoc=16,
             l3_size=l3_size,
-            l3_assoc=16
+            l3_assoc=16,
         )
 
         self.membus = membus
@@ -148,9 +150,16 @@ class PrivateL1PrivateL2L3CacheHierarchy(
 
         if board.has_coherent_io():
             self._setup_io_cache(board)
-        
+
         self.l3bus = L2XBar()
-        self.l3cache = L3Cache(size =self._l3_size)
+        self.l3cache = L3Cache(
+            size=str(
+                int(self._l3_size[:1])
+                * (board.get_processor().get_num_cores())
+            )
+            + "MB",
+            mshrs=64 * (board.get_processor().get_num_cores()),
+        )
         for i, cpu in enumerate(board.get_processor().get_cores()):
             cpu.connect_icache(self.l1icaches[i].cpu_side)
             cpu.connect_dcache(self.l1dcaches[i].cpu_side)
@@ -163,7 +172,6 @@ class PrivateL1PrivateL2L3CacheHierarchy(
             self.l2buses[i].mem_side_ports = self.l2caches[i].cpu_side
 
             self.l2caches[i].mem_side = self.l3bus.cpu_side_ports
-            
 
             cpu.connect_walker_ports(
                 self.iptw_caches[i].cpu_side, self.dptw_caches[i].cpu_side
@@ -177,6 +185,7 @@ class PrivateL1PrivateL2L3CacheHierarchy(
                 cpu.connect_interrupt()
         self.l3bus.mem_side_ports = self.l3cache.cpu_side
         self.membus.cpu_side_ports = self.l3cache.mem_side
+
     def _setup_io_cache(self, board: AbstractBoard) -> None:
         """Create a cache for coherent I/O connections"""
         self.iocache = Cache(

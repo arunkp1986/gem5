@@ -163,10 +163,16 @@ void
 BaseSimpleCPU::countFetchInst()
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
-
+    SimpleThread* tcp = t_info.thread;
+    int region_id = (int)tcp->readMiscRegNoEffect(
+                    gem5::X86ISA::misc_reg::CurrReg);
+    int ctx_id = (int)tcp->readMiscRegNoEffect(
+                    gem5::X86ISA::misc_reg::CtxReg);
     if (!curStaticInst->isMicroop() || curStaticInst->isLastMicroop()) {
         // increment thread level numInsts fetched count
-        fetchStats[t_info.thread->threadId()]->numInsts++;
+        //fetchStats[t_info.thread->threadId()]->numInsts++;
+        fetchStats[t_info.thread->threadId()]->numInsts.updateProperty(
+                        ctx_id,region_id,1);
     }
     // increment thread level numOps fetched count
     fetchStats[t_info.thread->threadId()]->numOps++;
@@ -176,10 +182,17 @@ void
 BaseSimpleCPU::countCommitInst()
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
+    SimpleThread* tcp = t_info.thread;
+    int region_id = (int)tcp->readMiscRegNoEffect(
+                    gem5::X86ISA::misc_reg::CurrReg);
+    int ctx_id = (int)tcp->readMiscRegNoEffect(
+                    gem5::X86ISA::misc_reg::CtxReg);
 
     if (!curStaticInst->isMicroop() || curStaticInst->isLastMicroop()) {
         // increment thread level and core level numInsts count
-        commitStats[t_info.thread->threadId()]->numInsts++;
+        //commitStats[t_info.thread->threadId()]->numInsts++;
+        commitStats[t_info.thread->threadId()]->numInsts.updateProperty(
+                        ctx_id,region_id,1);
         baseStats.numInsts++;
     }
     // increment thread level numOps count

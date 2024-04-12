@@ -594,11 +594,18 @@ Text::visit(const ScalarInfo &info)
       * Region ID 1 prints User Mode stats.
       * Region ID 0 is saved for Global region.
       */
-    const int max_regions = info.maxRegions;
-    const int max_contexts = info.maxContexts;
+     //std::cout<<"max region"<<max_regions<<std::endl;
+    //std::cout<<"max contexts"<<max_contexts<<std::endl;
     if (info.reg_enable){
+        const int max_regions = info.maxRegions;
+        const int max_contexts = info.maxContexts;
+        //std::cout<<"enabled"<<std::endl;
+        //std::cout<<"max contexts"<<max_contexts<<std::endl;
         for (int ctx_id = 0; ctx_id < max_contexts; ctx_id++){
+            //std::cout<<"inside ctx loop"<<std::endl;
+            //std::cout<<ctx_id<<std::endl;
             for (int region_id = 1; region_id < max_regions; region_id++) {
+                //std::cout<<region_id<<std::endl;
                 const std::string region = "_ctx_"+std::to_string(ctx_id)+
                         "_region_" +std::to_string(region_id);
                 ScalarPrint print(spaces);
@@ -611,6 +618,7 @@ Text::visit(const ScalarInfo &info)
                 print.cdf = Nan;
                 if (print.value)
                     print(*stream);
+                //std::cout<<region<<std::endl;
             }
         }
             const std::string region = "_Total";

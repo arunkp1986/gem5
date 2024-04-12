@@ -1298,7 +1298,11 @@ class BaseCache : public ClockedObject
     void incMissCount(PacketPtr pkt)
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
-        stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
+        int region_id = pkt->req->regionId();
+        int ctx_id = pkt->req->ctxId();
+        stats.cmdStats(pkt).misses[pkt->req->requestorId()].updateProperty(
+                        ctx_id, region_id, 1);
+        //stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
         pkt->req->incAccessDepth();
         if (missCount) {
             --missCount;
@@ -1309,7 +1313,11 @@ class BaseCache : public ClockedObject
     void incHitCount(PacketPtr pkt)
     {
         assert(pkt->req->requestorId() < system->maxRequestors());
-        stats.cmdStats(pkt).hits[pkt->req->requestorId()]++;
+        int region_id = pkt->req->regionId();
+        int ctx_id = pkt->req->ctxId();
+        stats.cmdStats(pkt).hits[pkt->req->requestorId()].updateProperty(
+                        ctx_id, region_id, 1);
+        //stats.cmdStats(pkt).hits[pkt->req->requestorId()]++;
     }
 
     /**
