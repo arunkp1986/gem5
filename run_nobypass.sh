@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#rm PhyMem.0
+#rm PhyMem.1
+
 outdir=$1
 kernel=$2
 disk=$3
