@@ -216,6 +216,7 @@ def config_mem(options, system):
         for i in range(nbr_mem_ctrls):
             if opt_mem_type and (not opt_nvm_type or range_iter % 2 != 0):
                 # Create the DRAM interface
+                print(r)
                 dram_intf = create_mem_intf(
                     intf, r, i, intlv_bits, intlv_size, opt_xor_low_bit
                 )
@@ -245,6 +246,7 @@ def config_mem(options, system):
                 mem_ctrls.append(mem_ctrl)
 
             elif opt_nvm_type and (not opt_mem_type or range_iter % 2 == 0):
+                print(r)
                 nvm_intf = create_mem_intf(
                     n_intf, r, i, intlv_bits, intlv_size, opt_xor_low_bit
                 )
@@ -269,6 +271,7 @@ def config_mem(options, system):
 
     # hook up NVM interface when channel is shared with DRAM + NVM
     for i in range(len(nvm_intfs)):
+        print(nvm_intfs[i])
         mem_ctrls[i].nvm = nvm_intfs[i]
 
     # Connect the controller to the xbar port

@@ -37,11 +37,12 @@ from m5.defines import buildEnv
 
 class SysConfig:
     def __init__(
-        self, script=None, mem=None, disks=None, rootdev=None, os_type="linux"
+        self, script=None, mem=None, nvm=None, disks=None, rootdev=None, os_type="linux"
     ):
         self.scriptname = script
         self.disknames = disks
         self.memsize = mem
+        self.nvmsize = nvm
         self.root = rootdev
         self.ostype = os_type
 
@@ -50,6 +51,12 @@ class SysConfig:
             return script(self.scriptname)
         else:
             return ""
+
+    def nvm(self):
+        if self.nvmsize:
+            return self.nvmsize
+        else:
+            return ''
 
     def mem(self):
         if self.memsize:
